@@ -113,7 +113,7 @@ def load_age_data():
             'Sophomore': 'Level II',
             'Junior': 'Level III',
             'Senior': 'Level IV',
-            'Too Old': 'Level V+',
+            'Student+': 'Level V+',
             'Post-Graduate': 'Graduate'
         }
         df['category'] = df['category'].replace(rename_map)

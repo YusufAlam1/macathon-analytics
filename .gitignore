@@ -18,7 +18,7 @@ outputs/
 
 # Local-only SQL / scripts (kept locally, excluded from repo)
 src/scripts/
-src/analysis/queries/mess_around.sql
+src/analysis/queries/ad-hoc/
 src/analysis/queries/filtered/
 src/analysis/queries/funnel/funnel_counts.sql
 src/analysis/queries/funnel/retention.sql
@@ -28,6 +28,10 @@ src/analysis/queries/winners/winners.sql
 src/analysis/queries/applications/gen*.sql
 src/analysis/queries/applications/count*.sql
 src/analysis/queries/applications/pro*.sql
+src/analysis/queries/applications/sc*.sql
+
+
+src/dashboard/filtered/loaders.py
 
 
 # ============================================================
