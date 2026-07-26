@@ -1,0 +1,50 @@
+# ============================================================
+# Local data — not committed. Kept on-machine only.
+# ============================================================
+
+# Databases
+*.db
+*.sqlite
+*.sqlite3
+
+# Data folders
+db/
+outputs/
+
+# Data exports
+*.csv
+*.xlsx
+*.xls
+
+# Local-only SQL / scripts (kept locally, excluded from repo)
+src/scripts/
+src/analysis/queries/mess_around.sql
+src/analysis/queries/filtered/
+src/analysis/queries/funnel/funnel_counts.sql
+src/analysis/queries/funnel/retention.sql
+src/analysis/queries/funnel/rsvp.sql
+src/analysis/queries/winners/winners.sql
+
+src/analysis/queries/applications/gen*.sql
+src/analysis/queries/applications/count*.sql
+src/analysis/queries/applications/pro*.sql
+
+
+# ============================================================
+# Python / env
+# ============================================================
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+.ipynb_checkpoints/
+
+# Streamlit secrets (Turso creds, viewer config, etc.)
+.streamlit/secrets.toml
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
