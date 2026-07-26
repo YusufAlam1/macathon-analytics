@@ -26,6 +26,7 @@ COLORS = {
     'ink': '#202124',
     'ink_2': '#5f6368',
     'ink_3': '#9aa0a6',
+    'white': '#ffffff',
     # Chrome
     'border': '#dadce0',
     'surface': '#ffffff',
@@ -128,13 +129,18 @@ def create_split_bar(left_label, right_label, left_val, right_val,
     fig.add_trace(go.Bar(
         y=[''], x=[right_val], orientation='h',
         marker=dict(color=COLORS['gray_track'], line=dict(color=COLORS['surface'], width=2)),
-        text=f"<b>{right_pct:.1f}%</b>" if right_pct >= 12 else '',
-        textposition='inside', insidetextanchor='middle',
-        textfont=dict(family=FONT_FAMILY, size=14, color=COLORS['ink']),
+        # No inside label — the right segment can be too narrow to hold its
+        # percent without clipping (e.g. International at 10%). Its percent
+        # lives in the top-right label instead, so it always shows.
+        text='',
         hoverinfo='skip',
     ))
 
-    # Side labels above the bar ends - always fit, regardless of the split
+    # Side labels above the bar ends - always fit, regardless of the split.
+    # Left carries just identity + count (its % is shown inside the red
+    # segment). Right carries identity + count + PERCENT in bold black, because
+    # the narrow gray segment holds no inside label — this is where
+    # International's percent lives, and it should read as boldly as Canada's.
     fig.add_annotation(
         x=0, y=1, xref='paper', yref='paper', xanchor='left', yanchor='bottom',
         text=f"<b>{left_label}</b> · {left_val:,}",
@@ -143,9 +149,9 @@ def create_split_bar(left_label, right_label, left_val, right_val,
     )
     fig.add_annotation(
         x=1, y=1, xref='paper', yref='paper', xanchor='right', yanchor='bottom',
-        text=f"{right_label} · {right_val:,}",
+        text=f"<b>{right_label}</b> · {right_val:,} · <b>{right_pct:.1f}%</b>",
         showarrow=False,
-        font=dict(family=FONT_FAMILY, size=13, color=COLORS['ink_2']),
+        font=dict(family=FONT_FAMILY, size=13, color=COLORS['ink']),
     )
 
     _base_layout(fig, height=height, margin=dict(l=2, r=2, t=34, b=6))
@@ -155,7 +161,8 @@ def create_split_bar(left_label, right_label, left_val, right_val,
     return fig
 
 
-def create_hbar(df, label_col, value_col, sort_col=None, color=None, highlight=None):
+def create_hbar(df, label_col, value_col, sort_col=None, color=None, highlight=None,
+                row_height=44, bargap=0.42):
     """Horizontal bars, one hue, values labeled at bar ends. X-axis hidden -
     the labels carry the values. Height fills a fixed row height per bar so the
     figure occupies its container instead of collapsing to minimum.
@@ -164,7 +171,13 @@ def create_hbar(df, label_col, value_col, sort_col=None, color=None, highlight=N
     bars whose label is in the set keep `color`; the rest are muted gray. Used
     when the chart's OWN filter dimension is active — it shows the full
     distribution (other filters still applied) with the selected bars in
-    colour. None -> every bar full colour (unchanged)."""
+    colour. None -> every bar full colour (unchanged).
+
+    `row_height` is the vertical space (px) allotted per bar and `bargap` the
+    fraction of that row left empty between bars — together they set bar
+    thickness and spacing. A chart with few bars can raise both so its bars
+    read as thick as a busier chart's instead of looking thin and lost in the
+    container (e.g. the 2-bar Canada/International vs. the 7-bar Programs)."""
 
     # Plotly renders the first dataframe row at the BOTTOM, so the desired
     # top-of-chart item must sort LAST. With a sort_col (group ordering like
@@ -190,8 +203,8 @@ def create_hbar(df, label_col, value_col, sort_col=None, color=None, highlight=N
         hovertemplate='<b>%{y}</b><br>%{x:,} applicants<extra></extra>',
     ))
 
-    _base_layout(fig, height=64 + 44 * n, margin=dict(l=8, r=16, t=8, b=8))
-    fig.update_layout(bargap=0.42, barcornerradius=4)
+    _base_layout(fig, height=64 + row_height * n, margin=dict(l=8, r=16, t=8, b=8))
+    fig.update_layout(bargap=bargap, barcornerradius=4)
     # leave headroom on the right so the outside labels never clip
     fig.update_xaxes(visible=False, range=[0, df[value_col].max() * 1.32])
     fig.update_yaxes(
@@ -363,6 +376,12 @@ def create_pie_chart(df, label_col, value_col, colors=None, height=340, highligh
         labels=df[label_col],
         values=df[value_col],
         hole=0.55,
+        # Inset the donut so it doesn't span the full plot area — a smaller ring
+        # with a band of empty space above it. The percent labels sit OUTSIDE
+        # the ring; without that top clearance a thin 12-o'clock slice's label
+        # (the 2.6% "Yes") rides off the top edge and clips. Shrinking the pie,
+        # not the container, is what makes room for the labels.
+        domain=dict(x=[0.15, 0.85], y=[0.14, 0.80]),
         marker=dict(colors=slice_colors,
                     line=dict(color=COLORS['surface'], width=2)),
         sort=False,
@@ -379,7 +398,8 @@ def create_pie_chart(df, label_col, value_col, colors=None, height=340, highligh
         paper_bgcolor='rgba(0,0,0,0)',
         plot_bgcolor='rgba(0,0,0,0)',
         font=dict(family=FONT_FAMILY, size=12, color=COLORS['ink']),
-        margin=dict(l=8, r=8, t=8, b=40),
+        # top room for the outside label on the topmost slice; bottom for legend
+        margin=dict(l=8, r=8, t=34, b=40),
         hoverlabel=HOVER_STYLE,
         showlegend=True,
         legend=dict(orientation='h', yanchor='bottom', y=-0.15,

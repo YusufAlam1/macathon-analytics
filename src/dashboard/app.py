@@ -312,9 +312,6 @@ def main():
             age_df = agg_count(sdf('academic_year'), 'academic_year', 'count', ACADEMIC_ORDER) \
                 .rename(columns={'academic_year': 'category'})
 
-            country_df = agg_count(sdf('country_bucket'), 'country_bucket', 'country_count', COUNTRY_ORDER) \
-                .rename(columns={'country_bucket': 'Country of Residence'})
-
             # schools_counts / attribution_counts already carry the frozen
             # sort_order (SCHOOL_ORDER / ATTRIB_ORDER) — no post-hoc reorder.
             schools_df = schools_counts(sdf('school_group'))
@@ -326,6 +323,7 @@ def main():
             country_df_f = agg_count(fdf, 'country_bucket', 'country_count', COUNTRY_ORDER) \
                 .rename(columns={'country_bucket': 'Country of Residence'})
             programs_df_f = agg_count(fdf, 'program_type', 'program_count', PROGRAM_ORDER)
+            schools_df_f = schools_counts(fdf)
 
             df_about = fdf[['about_length']].dropna()
             df_project = fdf[['project_length']].dropna()
@@ -395,7 +393,7 @@ def main():
                 st.markdown("### Returning hackers")
                 st.caption("Attended Mac-a-Thon last year (Jan. 2025)")
                 st.plotly_chart(create_pie_chart(prev_hacker_df, 'attended_last_year', 'count',
-                                                 colors=[COLORS['green'], COLORS['gray_track']],
+                                                 colors=[COLORS['red'], COLORS['green']],
                                                  highlight=hl('attended_last_year')),
                                 use_container_width=True, theme=None, config=PLOTLY_CONFIG,
                                 key="prev_hacker_chart")
@@ -425,54 +423,70 @@ def main():
         if show_demographics:
             st.markdown("## Demographics")
 
+            # --- Canadian vs. international: one proportional bar (binary split).
+            # Canada wears the brand red; International is the neutral remainder.
+            st.markdown("### Country (Canadian vs. international)")
+            total_country = country_df_f['country_count'].sum()
+            canada = country_df_f.loc[country_df_f['Country of Residence'] == 'Canada', 'country_count']
+            canada_count = int(canada.values[0]) if len(canada) else 0
+            intl_count = total_country - canada_count
+            st.plotly_chart(create_split_bar("Canada", "International",
+                                             canada_count, intl_count,
+                                             left_color=COLORS['red']),
+                            use_container_width=True, theme=None, config=PLOTLY_CONFIG,
+                            key="country_split")
+
+            # --- Schools + Programs side by side. Schools has 10 bars, Programs
+            # 7. row_height on each is set so BOTH figures are EXACTLY 372px
+            # (64 + row_height*n): Programs 64+44*7, Schools 64+30.8*10. Equal
+            # height + identical symmetric t/b margins + same bargap ⇒ the last
+            # (bottom) bar lands at the same pixel in both, so their bottoms are
+            # flush.
             c1, c2 = st.columns(2, gap="large")
             with c1:
-                st.markdown("### Countries & Continents of Residence")
-                st.caption("Key couuntries pulled out of continent grouping")
-                st.plotly_chart(create_hbar(country_df, 'Country of Residence', 'country_count', sort_col='sort_order',
-                                            color=COLORS['blue'], highlight=hl('country_bucket')),
+                st.markdown("### Schools")
+                # st.caption("Smaller schools grouped by region; College and High School kept separate")
+                st.plotly_chart(create_hbar(schools_df, 'school_group', 'count', sort_col='sort_order',
+                                            color=COLORS['blue'], highlight=hl('school_group'),
+                                            row_height=30.8),
                                 use_container_width=True, theme=None, config=PLOTLY_CONFIG,
-                                key="country_chart")
-
-                total_country = country_df_f['country_count'].sum()
-                canada = country_df_f.loc[country_df_f['Country of Residence'] == 'Canada', 'country_count']
-                canada_count = int(canada.values[0]) if len(canada) else 0
-                m1, m2 = st.columns(2)
-                m1.metric("Canada", f"{canada_count:,}",
-                          f"{canada_count / total_country * 100:.1f}%", delta_color="off")
-                m2.metric("International", f"{total_country - canada_count:,}",
-                          f"{(total_country - canada_count) / total_country * 100:.1f}%", delta_color="off")
+                                key="schools_chart")
 
             with c2:
                 st.markdown("### Programs")
                 # st.caption("Undergraduate students only")
                 st.plotly_chart(create_hbar(programs_df, 'program_type', 'program_count', sort_col='sort_order',
-                                            color=COLORS['green'], highlight=hl('program_type')),
+                                            color=COLORS['green'], highlight=hl('program_type'),
+                                            row_height=44),
                                 use_container_width=True, theme=None, config=PLOTLY_CONFIG,
                                 key="programs_chart")
 
-                # STEM metrics reflect the ACTIVE filter (fully-filtered frame),
-                # not the self-dimmed chart distribution.
-                stem_types = {'Software', 'Engineering', 'Math', 'Technology'}
-                total_undergrad = programs_df_f['program_count'].sum()
-                stem_count = int(programs_df_f.loc[
-                    programs_df_f['program_type'].isin(stem_types), 'program_count'].sum())
-                m1, m2 = st.columns(2)
-                m1.metric("In STEM", f"{stem_count / total_undergrad * 100:.1f}%")
-                m2.metric("Not in STEM", f"{(total_undergrad - stem_count) / total_undergrad * 100:.1f}%")
+            # All four KPI tiles in ONE full-width row (not nested inside the
+            # chart columns) so they align as a single band regardless of any
+            # height difference above. Left pair = Schools (McMaster share),
+            # right pair = Programs (STEM share). Whitespace between the pairs
+            # is acceptable per the design. All values use the fully-filtered
+            # frames, not the self-dimmed chart frames.
+            total_schools = schools_df_f['count'].sum()
+            mac = schools_df_f.loc[schools_df_f['school_group'] == 'McMaster University', 'count']
+            mac_count = int(mac.values[0]) if len(mac) else 0
+
+            stem_types = {'Software', 'Engineering', 'Math', 'Technology'}
+            total_undergrad = programs_df_f['program_count'].sum()
+            stem_count = int(programs_df_f.loc[
+                programs_df_f['program_type'].isin(stem_types), 'program_count'].sum())
+
+            k1, k2, k3, k4 = st.columns(4)
+            k1.metric("McMaster", f"{mac_count / total_schools * 100:.1f}%")
+            k2.metric("Other schools", f"{(total_schools - mac_count) / total_schools * 100:.1f}%")
+            k3.metric("In STEM", f"{stem_count / total_undergrad * 100:.1f}%")
+            k4.metric("Not in STEM", f"{(total_undergrad - stem_count) / total_undergrad * 100:.1f}%")
 
             st.markdown("### Academic year")
             st.plotly_chart(create_column_chart(age_df, 'category', 'count', sort_col='sort_order',
                                                 color=COLORS['amber'], highlight=hl('academic_year')),
                             use_container_width=True, theme=None, config=PLOTLY_CONFIG,
                             key="age_chart")
-
-            st.markdown("### Schools")
-            st.caption("Smaller schools grouped by region; College and High School kept separate")
-            st.plotly_chart(create_hbar(schools_df, 'school_group', 'count', sort_col='sort_order',
-                                        color=COLORS['blue'], highlight=hl('school_group')),
-                            use_container_width=True, theme=None, config=PLOTLY_CONFIG,
-                            key="schools_chart")
 
             st.markdown("---")
 

@@ -84,7 +84,7 @@ def render_filter_sidebar(df):
                 if key.startswith("flt_") and key != "flt_reset":
                     del st.session_state[key]
             st.rerun()
-    st.caption("Empty = show all. Filters apply to every chart below.")
+    # st.caption("Empty = show all. Filters apply to every chart below.")
 
     state = {}
 
