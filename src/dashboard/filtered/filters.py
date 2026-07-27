@@ -54,6 +54,23 @@ def _ordered_unique(series, order):
     return sorted(present)
 
 
+def _hs_key(dim):
+    """Session-state key for the 'High School' checkbox of a trio dimension."""
+    return f"flt_{dim}_{HS_VALUE}"
+
+
+def _sync_hs(changed_dim):
+    """on_change for a trio 'High School' checkbox: mirror its new value onto
+    the other two trio dimensions' HS checkboxes so ticking/unticking High
+    School anywhere ticks/unticks it in all three (Program / Academic year /
+    School). Runs before the ensuing rerun re-instantiates those widgets, so
+    the mirrored value is what they render with."""
+    val = st.session_state.get(_hs_key(changed_dim), False)
+    for d in HS_TRIO:
+        if d != changed_dim:
+            st.session_state[_hs_key(d)] = val
+
+
 def _active_filter_count(state):
     """How many dimensions currently have a real (non-empty) selection."""
     n = 0
@@ -116,8 +133,18 @@ def render_filter_sidebar(df):
 
         else:  # checkbox, grouped under an expander
             opts = _ordered_unique(df[col], order)
+            in_trio = col in HS_TRIO
             with st.expander(label, expanded=False):
-                picked = [o for o in opts if st.checkbox(str(o), value=False, key=f"flt_{col}_{o}")]
+                picked = []
+                for o in opts:
+                    # The 'High School' checkbox in a trio dimension mirrors its
+                    # state to the other two trio dims (Program/Academic/School)
+                    # via _sync_hs, so ticking HS anywhere ticks it everywhere.
+                    cb_kwargs = {}
+                    if in_trio and str(o) == HS_VALUE:
+                        cb_kwargs = dict(on_change=_sync_hs, args=(col,))
+                    if st.checkbox(str(o), value=False, key=f"flt_{col}_{o}", **cb_kwargs):
+                        picked.append(o)
             state[col] = picked
 
     active_n = _active_filter_count(state)
@@ -131,17 +158,78 @@ def render_filter_sidebar(df):
 # it can show the full funnel and gray (not drop) the un-reached stages.
 FUNNEL_DIM_COL = FILTER_DIMS[0][0]  # "funnel_stage_reached"
 
+# "High School" is one real cohort (the same 44 people) that surfaces as a bar
+# in THREE different dimensions — Program, Academic year, and School. Selecting
+# it is a single synchronized toggle (see render_filter_sidebar).
+#
+# The ONLY special case is "High School is the SOLE trio selection". Then:
+#   - the three trio charts show their FULL distribution with just the HS bar
+#     highlighted (gray-not-drop), and
+#   - the whole dashboard filters to the 44 High-Schoolers.
+# The moment ANY other trio value is also picked (e.g. Software + High School),
+# behavior reverts to normal: HS is just one selected value among others, the
+# whole dashboard filters on the union (Software OR High School = 614), and the
+# trio charts self-dim normally. All of this flows from _trio_keep_mask().
+HS_TRIO = ('program_type', 'academic_year', 'school_group')
+HS_VALUE = 'High School'
+
+
+def _trio_keep_mask(df, state, exclude_dim=None):
+    """Boolean Series: which rows the THREE trio dims (program/academic/school)
+    keep, as a unit, under the special High-School rule. `exclude_dim` (a trio
+    column or None) is self-dim-excluded from the picks — a chart passes its own
+    dim so it doesn't filter itself; the fully-filtered frame passes None so all
+    three participate.
+
+    Because HS is one synced cohort spread across three columns, AND-ing its
+    per-column equality would wrongly collapse combined selections (Software +
+    HS -> empty, since a Software applicant's academic/school != HS). So HS is
+    handled as a single cohort predicate `is_hs`, combined thus:
+      - other (non-HS) trio picks filter normally: AND across dims, OR within.
+      - HS is the SOLE trio pick  -> restrict to is_hs  (whole dashboard = the 44)
+        …but a chart (exclude_dim set) shows ALL its bars in that case (HS is
+        drawn highlighted, not filtered), so it keeps everyone.
+      - HS + other picks          -> (other picks) OR is_hs  (union HS back in).
+      - no HS                     -> just the other picks (fully normal)."""
+    idx_true = df.index.to_series().apply(lambda _: True)
+    participating = [d for d in HS_TRIO if d != exclude_dim]
+
+    hs_selected = any(HS_VALUE in (state.get(d) or ()) for d in HS_TRIO)
+    # The HS cohort is identical across all three columns; pick any participating
+    # trio column to identify it (fall back to the full trio if dim excluded).
+    id_col = participating[0] if participating else HS_TRIO[0]
+    is_hs = df[id_col] == HS_VALUE
+
+    picks_mask = idx_true.copy()
+    any_other_pick = False
+    for d in participating:
+        non_hs = [v for v in (state.get(d) or ()) if v != HS_VALUE]
+        if non_hs:
+            any_other_pick = True
+            picks_mask &= df[d].isin(non_hs)
+
+    if hs_selected and any_other_pick:
+        return picks_mask | is_hs                       # union HS back in (normal)
+    if hs_selected:  # HS is the sole trio selection
+        # A chart shows every bar (HS highlighted, not filtered); the fully-
+        # filtered frame restricts to the HS cohort.
+        return idx_true if exclude_dim is not None else is_hs
+    return picks_mask  # no HS: normal (all-True if no picks either)
+
 
 def apply_filters(df, state, exclude=()):
     """Pure (df, state) -> filtered df. No Streamlit dependency — safe to
     unit test directly. `exclude` is an iterable of dim column names to SKIP
-    (used to build the funnel chart's population, which applies every filter
-    EXCEPT the funnel stage so un-reached stages can be shown grayed)."""
+    entirely (used to build a chart's self-dim population — every filter EXCEPT
+    that chart's own dimension, so its bars are grayed not dropped).
+
+    The three High-School-trio dims are handled together via _trio_keep_mask
+    (see it for the sole-HS special case); every other dim filters plainly."""
     mask = df.index.to_series().apply(lambda _: True)
 
     for col, _, _, kind in FILTER_DIMS:
-        if col in exclude:
-            continue
+        if col in exclude or col in HS_TRIO:
+            continue  # trio dims handled as a unit below
         picked = state.get(col)
         if picked is None:
             continue  # not set / full range / "(all)" -> no filter
@@ -161,4 +249,23 @@ def apply_filters(df, state, exclude=()):
             if picked:
                 mask &= df[col].isin(picked)
 
+    # Trio dims: any trio dim NOT excluded participates. If ALL three are
+    # excluded (e.g. exclude=HS_TRIO to build a non-trio base), skip entirely.
+    if any(d not in exclude for d in HS_TRIO):
+        # exclude_dim: honor per-chart self-dim only when exactly one trio dim is
+        # excluded; the multi-exclude/base cases pass None (nothing to self-dim).
+        excluded_trio = [d for d in HS_TRIO if d in exclude]
+        exclude_dim = excluded_trio[0] if len(excluded_trio) == 1 else None
+        mask &= _trio_keep_mask(df, state, exclude_dim=exclude_dim)
+
     return df[mask]
+
+
+def trio_population(df, state, dim):
+    """Population for one High-School-trio chart (`dim` in HS_TRIO). Just
+    apply_filters excluding that chart's own dim — the trio's special HS rule is
+    baked into apply_filters via _trio_keep_mask, so:
+      - HS is the sole trio pick -> full distribution, HS bar highlighted.
+      - HS + other picks / no HS -> normal self-dim (Software narrows it, etc.).
+    Kept as a named helper so the call sites read intentionally."""
+    return apply_filters(df, state, exclude=(dim,))

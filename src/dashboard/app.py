@@ -42,7 +42,9 @@ from filtered.loaders import (
     load_applicants_wide, EXPERIENCE_ORDER, ACADEMIC_ORDER,
     COUNTRY_ORDER, PROGRAM_ORDER,
 )
-from filtered.filters import render_filter_sidebar, apply_filters, FUNNEL_DIM_COL
+from filtered.filters import (
+    render_filter_sidebar, apply_filters, trio_population, FUNNEL_DIM_COL,
+)
 from filtered.aggregations import (
     agg_count, funnel_counts, acceptance_counts, trend_counts,
     schools_counts, attribution_counts,
@@ -306,15 +308,19 @@ def main():
 
             # STEM-first order (problem #2 — deliberately different from the
             # live dashboard's Programs chart, which stays on its own
-            # count-descending order)
-            programs_df = agg_count(sdf('program_type'), 'program_type', 'program_count', PROGRAM_ORDER)
+            # count-descending order). program_type is in the HS trio ->
+            # trio_population (HS grays/unions, never drops bars).
+            programs_df = agg_count(trio_population(wide_df, filter_state, 'program_type'),
+                                    'program_type', 'program_count', PROGRAM_ORDER)
 
-            age_df = agg_count(sdf('academic_year'), 'academic_year', 'count', ACADEMIC_ORDER) \
+            age_df = agg_count(trio_population(wide_df, filter_state, 'academic_year'),
+                               'academic_year', 'count', ACADEMIC_ORDER) \
                 .rename(columns={'academic_year': 'category'})
 
             # schools_counts / attribution_counts already carry the frozen
             # sort_order (SCHOOL_ORDER / ATTRIB_ORDER) — no post-hoc reorder.
-            schools_df = schools_counts(sdf('school_group'))
+            # school_group is in the HS trio -> trio_population.
+            schools_df = schools_counts(trio_population(wide_df, filter_state, 'school_group'))
             attribution_df = attribution_counts(sdf('heard_bucket'))
 
             # Fully-filtered variants for the metric tiles under the charts
