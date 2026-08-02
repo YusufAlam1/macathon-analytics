@@ -2,18 +2,16 @@
 Data Layer - All SQL queries and data loading logic
 """
 import pandas as pd
-import sqlite3
 from datetime import datetime
 import streamlit as st
 
-# Database connection
-DB_PATH = '../../db/applications.db'
+# Connection comes from the shared helper (Turso when deployed, local file for
+# local dev) — see db.py. QUERY_PATH/FUNNEL_QUERY_PATH read .sql files from the
+# repo and are unrelated to where the DATA lives.
+from db import get_db_connection
+
 QUERY_PATH = '../analysis/queries/applications/'
 FUNNEL_QUERY_PATH = '../analysis/queries/funnel/'
-
-def get_db_connection():
-    """Get database connection"""
-    return sqlite3.connect(DB_PATH)
 
 @st.cache_data
 def load_attribution_data():
@@ -71,18 +69,6 @@ def load_date_data():
         daily_counts = df_clean.groupby('date_clean').size().reset_index(name='application_count')
         daily_counts = daily_counts.sort_values('date_clean')
         return daily_counts
-    finally:
-        conn.close()
-
-@st.cache_data
-def load_stem_data():
-    """Load STEM distribution data"""
-    conn = get_db_connection()
-    try:
-        with open(QUERY_PATH + 'stem.sql', 'r') as f:
-            query = f.read()
-        df = pd.read_sql_query(query, conn)
-        return df
     finally:
         conn.close()
 

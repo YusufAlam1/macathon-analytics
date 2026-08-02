@@ -20,18 +20,13 @@ outputs/
 src/scripts/
 src/analysis/queries/ad-hoc/
 src/analysis/queries/filtered/
-src/analysis/queries/funnel/funnel_counts.sql
 src/analysis/queries/funnel/retention.sql
 src/analysis/queries/funnel/rsvp.sql
 src/analysis/queries/winners/winners.sql
 
 src/analysis/queries/applications/gen*.sql
-src/analysis/queries/applications/count*.sql
+src/analysis/queries/applications/count_*.sql
 src/analysis/queries/applications/pro*.sql
-src/analysis/queries/applications/sc*.sql
-
-
-src/dashboard/filtered/loaders.py
 
 
 # ============================================================
@@ -46,7 +41,11 @@ env/
 .ipynb_checkpoints/
 
 # Streamlit secrets (Turso creds, viewer config, etc.)
-.streamlit/secrets.toml
+# Match secrets.toml under ANY .streamlit/ dir (the real one lives at
+# src/dashboard/.streamlit/secrets.toml, which a root-anchored rule missed).
+# The committed template secrets.toml.example is NOT matched by these.
+**/.streamlit/secrets.toml
+secrets.toml
 
 # OS / editor
 .DS_Store
