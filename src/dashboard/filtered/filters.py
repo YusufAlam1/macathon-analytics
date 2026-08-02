@@ -71,16 +71,50 @@ def _sync_hs(changed_dim):
             st.session_state[_hs_key(d)] = val
 
 
-def _active_filter_count(state):
-    """How many dimensions currently have a real (non-empty) selection."""
-    n = 0
-    for col, _, _, kind in FILTER_DIMS:
+def _active_filter_items(state):
+    """Human-readable (label, value_text) pairs for every dimension that has a
+    real selection — used to render the "active filters" summary so the user
+    can see exactly what's on without opening each expander.
+
+    The three High-School-trio 'High School' selections are one synced cohort,
+    so they collapse into a single "High School" line instead of appearing
+    under Program, Academic year and School separately."""
+    items = []
+    hs_shown = False
+    for col, label, _, kind in FILTER_DIMS:
         picked = state.get(col)
-        if kind == "checkbox":
-            n += 1 if picked else 0
-        else:
-            n += 1 if picked is not None else 0
-    return n
+        if kind == "single":
+            if picked is not None:
+                items.append((label, FUNNEL_SLIDER_LABELS.get(picked, picked)))
+        elif kind == "range_slider":
+            if picked is not None:
+                lo, hi = picked
+                items.append((label, f"{lo:%b %d} – {hi:%b %d}"))
+        else:  # checkbox
+            if not picked:
+                continue
+            vals = list(picked)
+            if col in HS_TRIO and HS_VALUE in vals:
+                vals = [v for v in vals if v != HS_VALUE]
+                if not hs_shown:
+                    items.append(("High School", "Yes"))
+                    hs_shown = True
+            if vals:
+                items.append((label, ", ".join(str(v) for v in vals)))
+    return items
+
+
+def _do_reset():
+    """Clear every filter widget's session_state key. Wired as the Reset
+    button's on_click callback: Streamlit runs on_click callbacks BEFORE the
+    widgets are re-instantiated in the ensuing rerun, so deleting a widget's key
+    here reliably snaps it back to its default — including checkboxes inside a
+    collapsed expander. (Deleting a key only resets a widget that hasn't been
+    instantiated yet this run; a manual st.rerun() after the click races with
+    the button's own auto-rerun and left widgets visually stuck.)"""
+    for key in list(st.session_state.keys()):
+        if key.startswith("flt_") and key not in ("flt_reset", "flt_expanded_all"):
+            del st.session_state[key]
 
 
 def render_filter_sidebar(df):
@@ -96,12 +130,24 @@ def render_filter_sidebar(df):
     with header_col:
         st.markdown("### Filters")
     with reset_col:
-        if st.button("Reset", key="flt_reset", help="Clear all filters"):
-            for key in list(st.session_state.keys()):
-                if key.startswith("flt_") and key != "flt_reset":
-                    del st.session_state[key]
+        # on_click runs _do_reset BEFORE the filter widgets are instantiated in
+        # this same rerun, so every checkbox/slider clears (see _do_reset).
+        st.button("Reset", key="flt_reset", help="Clear all filters",
+                  on_click=_do_reset)
+
+    # Expand / collapse every filter menu at once. The shared flag drives the
+    # `expanded=` of each checkbox expander below.
+    st.session_state.setdefault("flt_expanded_all", False)
+    exp_col, col_col = st.columns(2)
+    with exp_col:
+        if st.button("Expand all", key="flt_expand_all", use_container_width=True):
+            st.session_state["flt_expanded_all"] = True
             st.rerun()
-    # st.caption("Empty = show all. Filters apply to every chart below.")
+    with col_col:
+        if st.button("Collapse all", key="flt_collapse_all", use_container_width=True):
+            st.session_state["flt_expanded_all"] = False
+            st.rerun()
+    expanded_all = st.session_state["flt_expanded_all"]
 
     state = {}
 
@@ -134,7 +180,7 @@ def render_filter_sidebar(df):
         else:  # checkbox, grouped under an expander
             opts = _ordered_unique(df[col], order)
             in_trio = col in HS_TRIO
-            with st.expander(label, expanded=False):
+            with st.expander(label, expanded=expanded_all):
                 picked = []
                 for o in opts:
                     # The 'High School' checkbox in a trio dimension mirrors its
@@ -147,9 +193,25 @@ def render_filter_sidebar(df):
                         picked.append(o)
             state[col] = picked
 
-    active_n = _active_filter_count(state)
-    if active_n:
-        st.caption(f"{active_n} filter{'s' if active_n != 1 else ''} active")
+    # --- Active-filters summary -------------------------------------------
+    # A plain list of what's currently on, so the user never has to reopen each
+    # expander to remember which boxes they ticked.
+    items = _active_filter_items(state)
+    st.markdown("---")
+    if items:
+        # Count the visible rows, not raw dimensions, so the header matches what
+        # the user sees (the HS trio collapses to a single "High School" line).
+        st.markdown(f"**Active filters ({len(items)})**")
+        rows = "".join(
+            f'<div class="flt-active-row">'
+            f'<span class="flt-active-label">{label}</span>'
+            f'<span class="flt-active-val">{val}</span>'
+            f'</div>'
+            for label, val in items
+        )
+        st.markdown(f'<div class="flt-active-box">{rows}</div>', unsafe_allow_html=True)
+    else:
+        st.caption("No filters active — showing all applicants.")
 
     return state
 

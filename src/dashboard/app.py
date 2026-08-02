@@ -212,6 +212,47 @@ st.markdown(f"""
         border-right: 1px solid #eceef1;
     }}
 
+    /* --- Slider value/tick labels ------------------------------------------
+       Streamlit renders the slider's current value (the thumb bubble) and the
+       min/max tick labels in a monospace numeric font, which reads as "techy"
+       and clashes with the rest of the sidebar. Force the normal sans font. */
+    [data-testid="stSliderThumbValue"],
+    [data-testid="stSliderTickBarMin"],
+    [data-testid="stSliderTickBarMax"] {{
+        font-family: {FONT_FAMILY} !important;
+        font-feature-settings: normal !important;
+    }}
+
+    /* --- Active-filters summary box ---------------------------------------- */
+    .flt-active-box {{
+        border: 1px solid {COLORS['border']};
+        border-radius: 10px;
+        padding: 0.5rem 0.6rem;
+        background: #ffffff;
+        margin-top: 0.35rem;
+    }}
+    .flt-active-row {{
+        display: flex;
+        justify-content: space-between;
+        gap: 0.6rem;
+        padding: 0.2rem 0;
+        font-size: 0.82rem;
+        line-height: 1.3;
+    }}
+    .flt-active-row + .flt-active-row {{
+        border-top: 1px solid #f0f1f3;
+    }}
+    .flt-active-label {{
+        color: {COLORS['ink_2']};
+        font-weight: 500;
+        white-space: nowrap;
+    }}
+    .flt-active-val {{
+        color: {COLORS['ink']};
+        font-weight: 600;
+        text-align: right;
+    }}
+
     /* Charts flush inside their columns */
     [data-testid="stPlotlyChart"] {{
         padding: 0 !important;
@@ -266,8 +307,8 @@ def main():
         # FILTERED FEATURE: global filter sidebar, below the section toggles
         filter_state = render_filter_sidebar(wide_df)
 
-        st.markdown("---")
-        st.caption("Mac-a-Thon 2026 · Build with AI edition")
+        # st.markdown("---")
+        # st.caption("Mac-a-Thon 2026 · Build with AI edition")
 
     try:
         # No st.spinner here: the aggregation is fast pandas, and the spinner's
