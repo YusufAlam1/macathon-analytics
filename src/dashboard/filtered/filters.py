@@ -54,9 +54,17 @@ def _ordered_unique(series, order):
     return sorted(present)
 
 
+def _widget_key(name):
+    """Session-state key for a filter widget, namespaced by the current reset
+    generation. Reset works by bumping the generation (see _do_reset), which
+    gives every filter widget a brand-new key — and therefore a brand-new
+    widget identity that the browser renders at its default value."""
+    return f"flt_{st.session_state.get('flt_gen', 0)}_{name}"
+
+
 def _hs_key(dim):
     """Session-state key for the 'High School' checkbox of a trio dimension."""
-    return f"flt_{dim}_{HS_VALUE}"
+    return _widget_key(f"{dim}_{HS_VALUE}")
 
 
 def _sync_hs(changed_dim):
@@ -105,15 +113,22 @@ def _active_filter_items(state):
 
 
 def _do_reset():
-    """Clear every filter widget's session_state key. Wired as the Reset
-    button's on_click callback: Streamlit runs on_click callbacks BEFORE the
-    widgets are re-instantiated in the ensuing rerun, so deleting a widget's key
-    here reliably snaps it back to its default — including checkboxes inside a
-    collapsed expander. (Deleting a key only resets a widget that hasn't been
-    instantiated yet this run; a manual st.rerun() after the click races with
-    the button's own auto-rerun and left widgets visually stuck.)"""
+    """Reset every filter widget by bumping the key generation. Wired as the
+    Reset button's on_click callback (runs BEFORE widgets are re-instantiated
+    in the ensuing rerun).
+
+    Why not just delete the widgets' session_state keys: deleting a key clears
+    the SERVER-side value, but the widget keeps the same identity, so the
+    browser still holds (and re-sends on the next interaction) its stale
+    checked state — charts reset once, then the old checks silently come back.
+    Bumping the generation changes every widget's key, minting new widget
+    identities the frontend renders at their defaults. The previous
+    generation's keys are deleted so stale state can't linger."""
+    gen = st.session_state.get("flt_gen", 0)
+    st.session_state["flt_gen"] = gen + 1
+    prefix = f"flt_{gen}_"
     for key in list(st.session_state.keys()):
-        if key.startswith("flt_") and key not in ("flt_reset", "flt_expanded_all"):
+        if key.startswith(prefix):
             del st.session_state[key]
 
 
@@ -131,7 +146,8 @@ def render_filter_sidebar(df):
         st.markdown("### Filters")
     with reset_col:
         # on_click runs _do_reset BEFORE the filter widgets are instantiated in
-        # this same rerun, so every checkbox/slider clears (see _do_reset).
+        # this same rerun; it bumps the widget-key generation so every
+        # checkbox/slider is a fresh widget at its default (see _do_reset).
         st.button("Reset", key="flt_reset", help="Clear all filters",
                   on_click=_do_reset)
 
@@ -159,7 +175,7 @@ def render_filter_sidebar(df):
             # the "no filter" default. We label it "Applicants (all)" on the
             # slider (display only) instead of a separate redundant '(all)' stop.
             picked = st.select_slider(
-                label, options=order, value=order[0], key=f"flt_{col}",
+                label, options=order, value=order[0], key=_widget_key(col),
                 format_func=lambda s: FUNNEL_SLIDER_LABELS.get(s, s),
             )
             # First stage == full pool -> treat as no filter (mask short-circuits)
@@ -172,7 +188,7 @@ def render_filter_sidebar(df):
                 continue
             lo, hi = valid_dates.min().date(), valid_dates.max().date()
             picked = st.slider(
-                label, min_value=lo, max_value=hi, value=(lo, hi), key=f"flt_{col}",
+                label, min_value=lo, max_value=hi, value=(lo, hi), key=_widget_key(col),
             )
             # Full range selected = no filter (matches "empty = all" semantics)
             state[col] = None if picked == (lo, hi) else picked
@@ -189,7 +205,7 @@ def render_filter_sidebar(df):
                     cb_kwargs = {}
                     if in_trio and str(o) == HS_VALUE:
                         cb_kwargs = dict(on_change=_sync_hs, args=(col,))
-                    if st.checkbox(str(o), value=False, key=f"flt_{col}_{o}", **cb_kwargs):
+                    if st.checkbox(str(o), value=False, key=_widget_key(f"{col}_{o}"), **cb_kwargs):
                         picked.append(o)
             state[col] = picked
 
