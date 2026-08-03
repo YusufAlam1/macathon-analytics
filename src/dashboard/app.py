@@ -2,6 +2,7 @@
 Main Dashboard Orchestrator
 Handles layout, UI, and coordinates between data layer (queries) and visualization layer
 """
+import html
 import os
 from contextlib import nullcontext
 
@@ -49,6 +50,7 @@ from filtered.filters import (
 from filtered.projects import (
     load_project_members, applicant_email_index, project_count,
 )
+from filtered.schools_distinct import distinct_school_count
 from filtered.aggregations import (
     agg_count, funnel_counts, acceptance_counts, trend_counts,
     schools_counts, attribution_counts,
@@ -148,6 +150,17 @@ st.markdown(f"""
         display: flex;
         flex-direction: column;
         justify-content: flex-start;
+    }}
+    /* Cards carrying a measurement caveat (title=...). The only cue is a
+       help cursor and a slightly firmer border on hover — the note itself
+       stays in the native tooltip, so a reader who doesn't care never sees
+       a qualifier, and one who does gets it by pausing on the card. */
+    .kpi-card-hint {{
+        cursor: help;
+        transition: border-color 140ms ease-out;
+    }}
+    .kpi-card-hint:hover {{
+        border-color: #d4d7dc;
     }}
     .kpi-label {{
         color: {COLORS['ink_2']};
@@ -264,11 +277,21 @@ st.markdown(f"""
 def kpi_row(cards):
     """Render KPI cards as one flex container so every card is the same fixed
     height and the row sits flush inside a single wrapping rectangle.
-    Each card is (label, value)."""
+
+    Each card is (label, value) or (label, value, note). `note` is a caveat
+    about how the number is measured — rendered as the native browser tooltip
+    so it stays invisible until the reader hovers, rather than cluttering the
+    card with a qualifier most viewers don't need."""
     items = []
-    for label, value in cards:
+    for card in cards:
+        label, value = card[0], card[1]
+        note = card[2] if len(card) > 2 else None
+        # html.escape: the note is prose with commas/apostrophes going into an
+        # HTML attribute, so quotes must not break out of title="...".
+        title = f' title="{html.escape(str(note), quote=True)}"' if note else ''
+        hint = ' kpi-card-hint' if note else ''
         items.append(
-            f'<div class="kpi-card">'
+            f'<div class="kpi-card{hint}"{title}>'
             f'<div class="kpi-label">{label}</div>'
             f'<div class="kpi-value">{value}</div>'
             f'</div>'
@@ -398,14 +421,19 @@ def main():
         filters_active = bool(_active_filter_items(filter_state))
         projects = project_count(proj_members, proj_total, fdf, filters_active)
 
+        # Schools: distinct institutions with >= 2 applicants, taken from the RAW
+        # free-text column (NOT the frozen school_group buckets) with spelling
+        # variants normalized first — see filtered/schools_distinct.py.
+        schools = distinct_school_count(fdf)
+
         kpi_row([
             ("Applications Received", f"{total_apps:,}"),
-            ("Hackers Engaged", f"{attended:,}"),
-            # PLACEHOLDER: the distinct-school count needs a name-normalization
-            # decision first (raw column is free text: "Sheridan College" /
-            # "Sheridan college" / "University Of Waterloo" are all separate
-            # values), so it shows an em-dash until that's settled.
-            ("Schools Represented", "—"),
+            ("Hackers Engaged", f"{attended:,}",
+             "Reported value only accounts for physically checked-in attendees"
+             ", therefore the true figure is slightly higher"),
+            ("Schools Represented", f"{schools:,}",
+             "Counts schools with at least two applicants"
+             ", Single-applicant schools are excluded."),
             ("Projects Completed", f"{projects:,}"),
         ])
 
