@@ -123,3 +123,17 @@ ORDER BY
 --     applications
 -- GROUP BY
 --     level_of_study;
+
+
+
+WITH schools_with_more_than_2_applicants AS (
+        SELECT 
+            "Which school/college/university are you currently enrolled in? (If your school/institution is not in the list below, use this list to find a school/institution and paste it in 'Other')",
+        COUNT(*) AS count
+    FROM applications_wide
+    GROUP BY "Which school/college/university are you currently enrolled in? (If your school/institution is not in the list below, use this list to find a school/institution and paste it in 'Other')"
+    HAVING COUNT(*) > 1
+    ORDER BY count DESC
+)
+SELECT COUNT(*) AS school_count
+FROM schools_with_more_than_2_applicants;

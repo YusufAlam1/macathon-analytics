@@ -44,6 +44,10 @@ from filtered.loaders import (
 )
 from filtered.filters import (
     render_filter_sidebar, apply_filters, trio_population, FUNNEL_DIM_COL,
+    _active_filter_items,
+)
+from filtered.projects import (
+    load_project_members, applicant_email_index, project_count,
 )
 from filtered.aggregations import (
     agg_count, funnel_counts, acceptance_counts, trend_counts,
@@ -135,7 +139,7 @@ st.markdown(f"""
     }}
     .kpi-card {{
         flex: 1 1 0;
-        min-height: 118px;
+        min-height: 96px;
         box-sizing: border-box;
         background: #ffffff;
         border: 1px solid {COLORS['border']};
@@ -157,11 +161,6 @@ st.markdown(f"""
         font-weight: 700;
         letter-spacing: -0.5px;
         line-height: 1.1;
-    }}
-    .kpi-sub {{
-        color: {COLORS['ink_2']};
-        font-size: 0.85rem;
-        margin-top: 0.4rem;
     }}
 
     /* Metric cards: flat white card, hairline border */
@@ -265,15 +264,13 @@ st.markdown(f"""
 def kpi_row(cards):
     """Render KPI cards as one flex container so every card is the same fixed
     height and the row sits flush inside a single wrapping rectangle.
-    Each card is (label, value, sub) - sub may be None."""
+    Each card is (label, value)."""
     items = []
-    for label, value, sub in cards:
-        sub_html = f'<div class="kpi-sub">↑ {sub}</div>' if sub else '<div class="kpi-sub">&nbsp;</div>'
+    for label, value in cards:
         items.append(
             f'<div class="kpi-card">'
             f'<div class="kpi-label">{label}</div>'
             f'<div class="kpi-value">{value}</div>'
-            f'{sub_html}'
             f'</div>'
         )
     st.markdown(f'<div class="kpi-row">{"".join(items)}</div>', unsafe_allow_html=True)
@@ -299,7 +296,7 @@ def main():
     with st.sidebar:
         st.markdown("### View")
         st.caption("Toggle dashboard sections")
-        show_app_info = st.checkbox("Applications", value=True)
+        show_app_info = st.checkbox("Applicants", value=True)
         show_demographics = st.checkbox("Demographics", value=True)
         show_attributions = st.checkbox("Attributions", value=True)
         st.markdown("---")
@@ -387,34 +384,45 @@ def main():
             return
 
         # ---------- KPI hero row ----------
+        # Mirrors the sponsorship package's four headline stats (applications,
+        # hackers, schools, projects) rather than restating charts further down:
+        # acceptance rate was the funnel's 2nd bar (and pinned to 100% whenever
+        # a post-acceptance stage was filtered), and peak day was the trend
+        # chart's apex.
         total_apps = int(date_df['application_count'].sum()) if len(date_df) else 0
-        avg_apps = date_df['application_count'].mean() if len(date_df) else 0
-        peak = date_df.loc[date_df['application_count'].idxmax()] if len(date_df) else None
-        acceptance_rate = accepted / (accepted + rejected) * 100 if (accepted + rejected) else 0
+        attended = int(fdf['is_attended'].sum()) if len(fdf) else 0
+
+        # Projects: the true submitted count while unfiltered, else the
+        # email-joined count. See filtered/projects.py for why the two differ.
+        proj_members, proj_total = load_project_members(applicant_email_index(wide_df))
+        filters_active = bool(_active_filter_items(filter_state))
+        projects = project_count(proj_members, proj_total, fdf, filters_active)
 
         kpi_row([
-            ("Total applications", f"{total_apps:,}", None),
-            ("Acceptance rate", f"{acceptance_rate:.1f}%", f"{accepted:,} accepted"),
-            ("Average per day", f"{avg_apps:.1f}", None),
-            ("Peak day", f"{int(peak['application_count']):,}", f"{peak['date_clean']:%b %d}"),
+            ("Applications Received", f"{total_apps:,}"),
+            ("Hackers Engaged", f"{attended:,}"),
+            # PLACEHOLDER: the distinct-school count needs a name-normalization
+            # decision first (raw column is free text: "Sheridan College" /
+            # "Sheridan college" / "University Of Waterloo" are all separate
+            # values), so it shows an em-dash until that's settled.
+            ("Schools Represented", "—"),
+            ("Projects Completed", f"{projects:,}"),
         ])
 
-        st.markdown("---")
-
-        # ---------- Applicant retention funnel ----------
-        st.markdown("## Applicant Funnel")
-        st.caption("From application to a completed project — each stage is a subset of the one before it.")
-        st.plotly_chart(
-            create_funnel_chart(funnel_df, 'stage', 'count',
-                                highlight_stage=funnel_highlight),
-            use_container_width=True, theme=None, config=PLOTLY_CONFIG,
-            key="funnel_chart")
-
-        st.markdown("---")
+        st.markdown('<hr style="height: 3px; background-color: dark-gray; border: none;">', unsafe_allow_html=True)
 
         # ---------- Applications ----------
         if show_app_info:
-            st.markdown("## Applications")
+            st.markdown("## Applicants")
+
+            # ---------- Applicant retention funnel ----------
+            st.markdown("### Applicant funnel")
+            st.caption("From application to a completed project — each stage is a subset of the one before it.")
+            st.plotly_chart(
+                create_funnel_chart(funnel_df, 'stage', 'count',
+                                    highlight_stage=funnel_highlight),
+                use_container_width=True, theme=None, config=PLOTLY_CONFIG,
+                key="funnel_chart")
 
             st.markdown("### Applications per day")
             st.plotly_chart(create_trend_chart(date_df),
@@ -554,9 +562,7 @@ def main():
             top_source = attribution_df_f.loc[attribution_df_f['attribution_count'].idxmax()]
             m1, m2 = st.columns(2)
             m1.metric("Responses", f"{total_attr:,}")
-            m2.metric("Top source", top_source['source'],
-                      f"{top_source['attribution_count'] / total_attr * 100:.1f}% of applicants",
-                      delta_color="off")
+            m2.metric("Top source", top_source['source'])
 
     except Exception as e:
         st.error(f"An error occurred: {str(e)}")
