@@ -248,12 +248,15 @@ def render_filter_sidebar(df):
             # funnel dim is FIRST in FILTER_DIMS, so its state is already in
             # `state` by the time we reach gender here.
             gated = col == GENDER_DIM_COL and not gender_available(state)
-            # st.expander gained a `key=` only in Streamlit 1.48; we're on 1.45,
-            # so the generation goes on a keyed CONTAINER wrapping it. Changing
-            # the parent's identity remounts the expander inside it just the
-            # same, which is what drops the stale open/closed state.
-            with st.container(key=f"flt_exp_{exp_gen}_{col}"), \
-                    st.expander(label, expanded=expanded_all):
+            # st.expander gained a `key=` only in Streamlit 1.48 (we're on
+            # 1.45), and a keyed wrapper container does NOT work — it only adds
+            # a CSS class, leaving the expander's own identity (and its sticky
+            # open/closed state) untouched; verified in a real browser.
+            # What IS part of an expander's identity in 1.45 is its LABEL, so we
+            # append `exp_gen` zero-width spaces: invisible to the user, but a
+            # different label each press, so React mounts a fresh expander that
+            # honours `expanded=`.
+            with st.expander(label + "​" * exp_gen, expanded=expanded_all):
                 if gated:
                     # Render the boxes disabled rather than hiding them, so the
                     # dimension's existence — and the reason it's unavailable —

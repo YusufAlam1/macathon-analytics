@@ -620,11 +620,11 @@ def main():
         kpi_row([
             ("Applications Received", f"{total_apps:,}"),
             ("Hackers Engaged", f"{attended:,}",
-             "Reported value only accounts for physically checked-in attendees"
-             ", therefore the true figure is slightly higher"),
+             "Note: Value only accounts for physically checked-in hackers"
+             ", true attendance count expected to be higher."),
             ("Schools Represented", f"{schools:,}",
              "Counts schools with at least two applicants"
-             ", Single-applicant schools are excluded."),
+             ". Single-applicant schools are excluded."),
             ("Projects Completed", f"{projects:,}"),
         ])
 
@@ -775,8 +775,8 @@ def main():
                     note="Gender was only collected in the RSVP survey, so it "
                          "exists for **RSVPed applicants only**.\n\n"
                          "This chart is frozen: it shows the full RSVP "
-                         "population and ignores the filters above. To see "
-                         "gender respond to your filters, set "
+                         "population and ignores any filters."
+                         "\t\tTo see gender respond to your filters, set "
                          "**Applicant funnel** to **RSVPed** or beyond.")
             st.plotly_chart(create_split_bar("Male", "Female",
                                              male_count, female_count,
