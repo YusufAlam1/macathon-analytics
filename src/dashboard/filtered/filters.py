@@ -34,14 +34,14 @@ FUNNEL_SLIDER_LABELS = {FUNNEL_STAGE_ORDER[0]: 'Applicants (all)'}
 FILTER_DIMS = [
     ("funnel_stage_reached", "Applicant funnel",     FUNNEL_STAGE_ORDER, "single"),
     ("app_date",             "Application date",     None,               "range_slider"),
-    ("program_type",         "Program",              PROGRAM_ORDER,      "checkbox"),
-    ("academic_year",        "Academic year",        ACADEMIC_ORDER,     "checkbox"),
-    ("school_group",         "School",               SCHOOL_ORDER,       "checkbox"),
-    ("country_bucket",       "Country/Region",       COUNTRY_ORDER,      "checkbox"),
     ("experience",           "Hackathon experience", EXPERIENCE_ORDER,   "checkbox"),
     ("attended_last_year",   "Returning hacker",     ["Yes", "No"],      "checkbox"),
-    ("heard_bucket",         "Heard about us via",   ATTRIB_ORDER,       "checkbox"),
+    ("country_bucket",       "Country/Region",       COUNTRY_ORDER,      "checkbox"),
+    ("program_type",         "Program",              PROGRAM_ORDER,      "checkbox"),
+    ("school_group",         "School",               SCHOOL_ORDER,       "checkbox"),
+    ("academic_year",        "Academic year",        ACADEMIC_ORDER,     "checkbox"),
     ("gender",               "Gender",               GENDER_ORDER,       "checkbox"),
+    ("heard_bucket",         "Heard about us via",   ATTRIB_ORDER,       "checkbox"),
 ]
 
 # ---------------------------------------------------------------------------
@@ -165,29 +165,53 @@ def render_filter_sidebar(df):
     options from the fixed order list in FILTER_DIMS, so the option set is the
     frozen canonical labels and stays stable regardless of other filters.
     """
-    header_col, reset_col = st.columns([3, 2])
+    # Header row: title on the left, then the three controls as a compact
+    # cluster on the right. Expand/collapse are icon-only (the double-chevron
+    # reads as "all", not "one") so the row stays short enough for Reset — the
+    # only destructive control — to keep its word and sit at the far right.
+    # Streamlit stamps each keyed widget's wrapper with `st-key-<key>`, which is
+    # what app.py's CSS hooks to size the icon buttons and give Reset its red
+    # hover without touching any other button on the page.
+    # Column ratio is deliberately title-light: "Filters" is one short word, so
+    # giving it less share leaves the buttons enough width to hold their padding
+    # (and keeps "Reset" on one line) at the sidebar's real width.
+    header_col, exp_col, col_col, reset_col = st.columns(
+        [3, 1.75    , 1.75, 3], vertical_alignment="center")
     with header_col:
         st.markdown("### Filters")
+
+    # Expand / collapse every filter menu at once. The shared flag drives the
+    # `expanded=` of each checkbox expander below.
+    #
+    # `expanded=` is only an INITIAL value: once the user clicks an expander's
+    # own chevron, Streamlit remembers that per-expander open/closed state and
+    # ignores the prop unless it changes between reruns. So after opening three
+    # menus by hand, Collapse All would set the flag False -> False, no prop
+    # change, nothing happens. We bump `flt_exp_gen` on every press and fold it
+    # into each expander's key, minting fresh expander identities that have no
+    # remembered state and therefore honour `expanded=` every time.
+    st.session_state.setdefault("flt_expanded_all", False)
+    st.session_state.setdefault("flt_exp_gen", 0)
+    with exp_col:
+        if st.button(":material/keyboard_double_arrow_down:", key="flt_expand_all",
+                     help="Expand All", use_container_width=True):
+            st.session_state["flt_expanded_all"] = True
+            st.session_state["flt_exp_gen"] += 1
+            st.rerun()
+    with col_col:
+        if st.button(":material/keyboard_double_arrow_up:", key="flt_collapse_all",
+                     help="Collapse All", use_container_width=True):
+            st.session_state["flt_expanded_all"] = False
+            st.session_state["flt_exp_gen"] += 1
+            st.rerun()
     with reset_col:
         # on_click runs _do_reset BEFORE the filter widgets are instantiated in
         # this same rerun; it bumps the widget-key generation so every
         # checkbox/slider is a fresh widget at its default (see _do_reset).
         st.button("Reset", key="flt_reset", help="Clear all filters",
-                  on_click=_do_reset)
-
-    # Expand / collapse every filter menu at once. The shared flag drives the
-    # `expanded=` of each checkbox expander below.
-    st.session_state.setdefault("flt_expanded_all", False)
-    exp_col, col_col = st.columns(2)
-    with exp_col:
-        if st.button("Expand all", key="flt_expand_all", use_container_width=True):
-            st.session_state["flt_expanded_all"] = True
-            st.rerun()
-    with col_col:
-        if st.button("Collapse all", key="flt_collapse_all", use_container_width=True):
-            st.session_state["flt_expanded_all"] = False
-            st.rerun()
+                  on_click=_do_reset, use_container_width=True)
     expanded_all = st.session_state["flt_expanded_all"]
+    exp_gen = st.session_state["flt_exp_gen"]
 
     state = {}
 
@@ -224,7 +248,12 @@ def render_filter_sidebar(df):
             # funnel dim is FIRST in FILTER_DIMS, so its state is already in
             # `state` by the time we reach gender here.
             gated = col == GENDER_DIM_COL and not gender_available(state)
-            with st.expander(label, expanded=expanded_all):
+            # st.expander gained a `key=` only in Streamlit 1.48; we're on 1.45,
+            # so the generation goes on a keyed CONTAINER wrapping it. Changing
+            # the parent's identity remounts the expander inside it just the
+            # same, which is what drops the stale open/closed state.
+            with st.container(key=f"flt_exp_{exp_gen}_{col}"), \
+                    st.expander(label, expanded=expanded_all):
                 if gated:
                     # Render the boxes disabled rather than hiding them, so the
                     # dimension's existence — and the reason it's unavailable —
@@ -266,7 +295,7 @@ def render_filter_sidebar(df):
         )
         st.markdown(f'<div class="flt-active-box">{rows}</div>', unsafe_allow_html=True)
     else:
-        st.caption("No filters active — showing all applicants.")
+        st.caption("No Filters Active -- All Applicants Shown")
 
     return state
 

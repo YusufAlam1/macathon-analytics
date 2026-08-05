@@ -288,6 +288,73 @@ st.markdown(f"""
         border-right: 1px solid #eceef1;
     }}
 
+    /* --- Filter header controls ---------------------------------------------
+       "Filters  [⌄⌄] [⌃⌃]   [Reset]" on one row. Streamlit stamps every keyed
+       widget's wrapper with `st-key-<key>`, so these rules reach only the three
+       filter-header buttons and leave the rest of the page's buttons alone.
+       The row's own top margin is trimmed because the `### Filters` h3 already
+       carries block spacing. */
+    [data-testid="stSidebar"] .st-key-flt_expand_all button,
+    [data-testid="stSidebar"] .st-key-flt_collapse_all button,
+    [data-testid="stSidebar"] .st-key-flt_reset button {{
+        border: 1px solid {COLORS['border']};
+        border-radius: 8px;
+        color: {COLORS['ink_2']};
+        font-size: 0.8rem;
+        font-weight: 500;
+        /* All three share one fixed height so the row reads as a single
+           cluster; Streamlit otherwise pads the icon-only buttons taller than
+           the text one. */
+        height: 38px;
+        min-height: 38px;
+        padding: 0 0.9rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        /* The label must never wrap — a squeezed column previously broke
+           "Reset" across two lines and ballooned the button. */
+        white-space: nowrap;
+        transition: border-color 140ms ease-out, color 140ms ease-out,
+                    background-color 140ms ease-out;
+    }}
+    /* Icon buttons carry their padding as width rather than around a label.
+       min-width keeps them comfortably rectangular: below ~40px the fixed
+       height turns them into pills. */
+    [data-testid="stSidebar"] .st-key-flt_expand_all button,
+    [data-testid="stSidebar"] .st-key-flt_collapse_all button {{
+        padding: 0 0.5rem;
+        min-width: 44px;
+    }}
+    /* Reset holds its word on one line with room to breathe around it. */
+    [data-testid="stSidebar"] .st-key-flt_reset button {{
+        min-width: 76px;
+    }}
+    [data-testid="stSidebar"] .st-key-flt_expand_all button p,
+    [data-testid="stSidebar"] .st-key-flt_collapse_all button p,
+    [data-testid="stSidebar"] .st-key-flt_expand_all button span,
+    [data-testid="stSidebar"] .st-key-flt_collapse_all button span {{
+        font-size: 1.1rem;
+        line-height: 1;
+        margin: 0;
+    }}
+    [data-testid="stSidebar"] .st-key-flt_expand_all button:hover,
+    [data-testid="stSidebar"] .st-key-flt_collapse_all button:hover {{
+        border-color: {COLORS['blue']};
+        color: {COLORS['blue']};
+    }}
+    /* Reset is the one destructive control here, so it (and only it) goes red
+       on hover — the affordance that says "this throws your selections away". */
+    [data-testid="stSidebar"] .st-key-flt_reset button:hover {{
+        border-color: {COLORS['red']};
+        color: {COLORS['red']};
+        background-color: rgba(234, 67, 53, 0.06);
+    }}
+    [data-testid="stSidebar"] .st-key-flt_reset button:active,
+    [data-testid="stSidebar"] .st-key-flt_reset button:focus:not(:active) {{
+        border-color: {COLORS['red']} !important;
+        color: {COLORS['red']} !important;
+    }}
+
     /* --- Slider value/tick labels ------------------------------------------
        Streamlit renders the slider's current value (the thumb bubble) and the
        min/max tick labels in a monospace numeric font, which reads as "techy"
