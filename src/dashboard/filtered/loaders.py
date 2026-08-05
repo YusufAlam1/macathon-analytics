@@ -249,6 +249,22 @@ def map_heard_source(df):
 
 EXPERIENCE_ORDER = ['None', '1', '2 - 3', '4+']
 
+# ---------------------------------------------------------------------------
+# Gender — RSVP-ONLY dimension.
+# ---------------------------------------------------------------------------
+# gdg_gender is joined in from gdg_attendees, and that table only holds people
+# who reached the RSVP stage. So the column is non-null for exactly the RSVPed
+# population and NULL for every applicant who never RSVPed (verified: 315
+# RSVPed rows all populated, 530 non-RSVP rows all NULL). This is a coverage
+# gap, not missing data to impute — which is why the dashboard gates the whole
+# gender section on the funnel filter rather than charting a 63%-null column.
+# Mirrors src/analysis/queries/applications/gender.sql.
+GENDER_COL = 'gdg_gender'
+GENDER_ORDER = ['Male', 'Female']
+# The funnel stage at which gender data starts existing; stages at or past it
+# have full coverage. Used by both the filter gate and the chart's frozen state.
+GENDER_MIN_STAGE = 'RSVPed'
+
 FUNNEL_STAGE_ORDER = ['Applied', 'Accepted', 'RSVPed', 'Attended', 'Completed Project']
 # "Reached-at-least stage X" = the row's is_X flag directly. The funnel is 5
 # INDEPENDENT counts (proof-of-presence can skip a tracked stage), so this is
@@ -295,6 +311,11 @@ def load_applicants_wide():
     df['experience'] = df["How many hackathons have you attended in the past?"]
     df['attended_last_year'] = df["Were you a hacker at Mac-a-Thon last time (Jan. 2025)?"]
     df['heard_source'] = df["How did you hear about us?"]  # raw, pre-fold (kept for reference)
+
+    # Gender, RSVP-only (see GENDER_COL). Left as-is including its NULLs —
+    # agg_count's dropna and the funnel gate handle the coverage gap; filling
+    # them with a label would invent a category the survey never collected.
+    df['gender'] = df[GENDER_COL]
 
     # response lengths for the histograms
     about = ("Answer this short answer question in 5 sentences or less: "

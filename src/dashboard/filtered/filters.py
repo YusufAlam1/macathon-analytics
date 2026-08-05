@@ -15,6 +15,7 @@ import streamlit as st
 from filtered.loaders import (
     FUNNEL_STAGE_ORDER, STAGE_TO_FLAG, PROGRAM_ORDER, ACADEMIC_ORDER,
     COUNTRY_ORDER, EXPERIENCE_ORDER, SCHOOL_ORDER, ATTRIB_ORDER,
+    GENDER_ORDER, GENDER_MIN_STAGE,
 )
 
 # The first funnel stage ('Applied') is the entire applicant pool, so on the
@@ -40,7 +41,30 @@ FILTER_DIMS = [
     ("experience",           "Hackathon experience", EXPERIENCE_ORDER,   "checkbox"),
     ("attended_last_year",   "Returning hacker",     ["Yes", "No"],      "checkbox"),
     ("heard_bucket",         "Heard about us via",   ATTRIB_ORDER,       "checkbox"),
+    ("gender",               "Gender",               GENDER_ORDER,       "checkbox"),
 ]
+
+# ---------------------------------------------------------------------------
+# Gender gate — the one dimension whose data doesn't cover the whole pool.
+# ---------------------------------------------------------------------------
+# gender is only populated for RSVPed+ applicants (see loaders.GENDER_COL), so
+# a Male/Female tick can only ever match RSVPed rows. Left ungated it would
+# silently collapse the dashboard from 845 to 234 while the funnel slider still
+# read "Applicants (all)" — a filter quietly doing a second filter's job. So
+# the expander stays DISABLED until the funnel filter reaches RSVPed, making
+# the funnel slider the single explicit gate for entering gender-covered data.
+GENDER_DIM_COL = "gender"
+# Funnel stages at/after RSVPed — every one of them has full gender coverage
+# (each is a subset of RSVPed), so any of them unlocks the filter.
+GENDER_STAGES = tuple(FUNNEL_STAGE_ORDER[FUNNEL_STAGE_ORDER.index(GENDER_MIN_STAGE):])
+
+
+def gender_available(state):
+    """True when the funnel filter sits at RSVPed or deeper — i.e. the viewed
+    population is one gender data actually covers. Drives BOTH the sidebar
+    gate (filter enabled?) and the chart's frozen state in app.py, so the two
+    can never disagree about whether gender is live."""
+    return state.get(FUNNEL_DIM_COL) in GENDER_STAGES
 
 
 def _ordered_unique(series, order):
@@ -196,7 +220,22 @@ def render_filter_sidebar(df):
         else:  # checkbox, grouped under an expander
             opts = _ordered_unique(df[col], order)
             in_trio = col in HS_TRIO
+            # Gender is gated on the funnel depth (see gender_available). The
+            # funnel dim is FIRST in FILTER_DIMS, so its state is already in
+            # `state` by the time we reach gender here.
+            gated = col == GENDER_DIM_COL and not gender_available(state)
             with st.expander(label, expanded=expanded_all):
+                if gated:
+                    # Render the boxes disabled rather than hiding them, so the
+                    # dimension's existence — and the reason it's unavailable —
+                    # is discoverable instead of silently absent.
+                    st.caption("Only collected at RSVP. Set **Applicant funnel** "
+                               f"to **{GENDER_MIN_STAGE}** or beyond to filter by gender.")
+                    for o in opts:
+                        st.checkbox(str(o), value=False, disabled=True,
+                                    key=_widget_key(f"{col}_{o}_off"))
+                    state[col] = []
+                    continue
                 picked = []
                 for o in opts:
                     # The 'High School' checkbox in a trio dimension mirrors its
@@ -325,6 +364,13 @@ def apply_filters(df, state, exclude=()):
 
         else:  # checkbox: empty list = no filter, else OR via isin
             if picked:
+                # Gender only filters while the funnel gate is open. The sidebar
+                # already forces the state to [] when gated, but apply_filters
+                # is a pure function called directly from tests and from the
+                # self-dim/funnel paths, so it enforces the gate itself rather
+                # than trusting its caller's state to be well-formed.
+                if col == GENDER_DIM_COL and not gender_available(state):
+                    continue
                 mask &= df[col].isin(picked)
 
     # Trio dims: any trio dim NOT excluded participates. If ALL three are

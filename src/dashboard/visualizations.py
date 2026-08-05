@@ -106,33 +106,78 @@ def create_trend_chart(df):
 
 
 def create_split_bar(left_label, right_label, left_val, right_val,
-                     left_color=None, height=110):
+                     left_color=None, height=110, right_color=None,
+                     right_inside_pct=False, muted=False, highlight=None):
     """Proportional binary split: one bar, two segments, fully labeled.
 
-    Left segment wears the brand hue; the remainder is neutral gray
+    Left segment wears the brand hue; by default the remainder is neutral gray
     (not red - the right side is 'the rest', not an error state).
+
+    `right_color` overrides that neutral for a bar whose right side is its OWN
+    identity rather than a remainder (Gender: Male blue / Female red — both are
+    categories, so both carry a hue). `right_inside_pct` then also draws the
+    right percent inside its own segment, since a two-identity bar reads better
+    with each percent sitting on its own mark.
+
+    `muted` renders the whole figure de-emphasized (gray marks, gray labels) —
+    the frozen state for a chart whose data cannot respond to the current
+    filters. Visual state only; the numbers passed in are drawn unchanged, and
+    the left percent moves out to the label since the gray segment carries no
+    inside text.
+
+    `highlight` (a collection of the labels to keep coloured) is the same
+    self-dim treatment create_hbar/create_column_chart use: when this chart's
+    OWN filter dimension is active it keeps showing the full split, with the
+    selected side in colour and the unselected side muted. None -> both sides
+    full colour.
     """
     left_color = left_color or COLORS['green']
+    right_seg_color = right_color or COLORS['gray_track']
+    # Self-dim: gray whichever side isn't selected (only when a highlight is
+    # actually given AND it doesn't cover both sides — highlighting everything
+    # is the same as highlighting nothing).
+    if highlight:
+        picked = set(highlight)
+        if left_label not in picked:
+            left_color = COLORS['gray_track']
+        if right_label not in picked:
+            right_seg_color = COLORS['gray_track']
+    if muted:
+        # Frozen: both segments drop to the de-emphasis grays so the bar reads
+        # as inactive at a glance, while its numbers stay fully legible.
+        left_color, right_seg_color = COLORS['gray_data'], COLORS['gray_track']
+    label_color = COLORS['ink_3'] if muted else COLORS['ink']
     total = left_val + right_val
-    left_pct = left_val / total * 100
-    right_pct = right_val / total * 100
+    left_pct = left_val / total * 100 if total else 0
+    right_pct = right_val / total * 100 if total else 0
+
+    # White inside-text is unreadable on the light gray_track fill a self-dimmed
+    # segment gets, so each segment's label follows its own fill.
+    def _inside_text_color(seg_color):
+        return COLORS['ink_2'] if seg_color == COLORS['gray_track'] else '#ffffff'
 
     fig = go.Figure()
     fig.add_trace(go.Bar(
         y=[''], x=[left_val], orientation='h',
         marker=dict(color=left_color, line=dict(color=COLORS['surface'], width=2)),
-        text=f"<b>{left_pct:.1f}%</b>" if left_pct >= 12 else '',
+        text=f"<b>{left_pct:.1f}%</b>" if (left_pct >= 12 and not muted) else '',
         textposition='inside', insidetextanchor='middle',
-        textfont=dict(family=FONT_FAMILY, size=14, color='#ffffff'),
+        textfont=dict(family=FONT_FAMILY, size=14,
+                      color=_inside_text_color(left_color)),
         hoverinfo='skip',
     ))
     fig.add_trace(go.Bar(
         y=[''], x=[right_val], orientation='h',
-        marker=dict(color=COLORS['gray_track'], line=dict(color=COLORS['surface'], width=2)),
-        # No inside label — the right segment can be too narrow to hold its
-        # percent without clipping (e.g. International at 10%). Its percent
-        # lives in the top-right label instead, so it always shows.
-        text='',
+        marker=dict(color=right_seg_color, line=dict(color=COLORS['surface'], width=2)),
+        # By default no inside label — the right segment can be too narrow to
+        # hold its percent without clipping (e.g. International at 10%). Its
+        # percent lives in the top-right label instead, so it always shows.
+        # right_inside_pct opts in when the segment is wide enough to hold it.
+        text=(f"<b>{right_pct:.1f}%</b>"
+              if (right_inside_pct and right_pct >= 12 and not muted) else ''),
+        textposition='inside', insidetextanchor='middle',
+        textfont=dict(family=FONT_FAMILY, size=14,
+                      color=_inside_text_color(right_seg_color)),
         hoverinfo='skip',
     ))
 
@@ -143,15 +188,18 @@ def create_split_bar(left_label, right_label, left_val, right_val,
     # International's percent lives, and it should read as boldly as Canada's.
     fig.add_annotation(
         x=0, y=1, xref='paper', yref='paper', xanchor='left', yanchor='bottom',
-        text=f"<b>{left_label}</b> · {left_val:,}",
+        # When muted, no inside text is drawn at all, so the left percent has
+        # to move out here or it would be lost entirely.
+        text=f"<b>{left_label}</b> · {left_val:,}"
+             + (f" · <b>{left_pct:.1f}%</b>" if muted else ''),
         showarrow=False,
-        font=dict(family=FONT_FAMILY, size=13, color=COLORS['ink']),
+        font=dict(family=FONT_FAMILY, size=13, color=label_color),
     )
     fig.add_annotation(
         x=1, y=1, xref='paper', yref='paper', xanchor='right', yanchor='bottom',
         text=f"<b>{right_label}</b> · {right_val:,} · <b>{right_pct:.1f}%</b>",
         showarrow=False,
-        font=dict(family=FONT_FAMILY, size=13, color=COLORS['ink']),
+        font=dict(family=FONT_FAMILY, size=13, color=label_color),
     )
 
     _base_layout(fig, height=height, margin=dict(l=2, r=2, t=34, b=6))

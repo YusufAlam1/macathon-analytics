@@ -45,7 +45,7 @@ from filtered.loaders import (
 )
 from filtered.filters import (
     render_filter_sidebar, apply_filters, trio_population, FUNNEL_DIM_COL,
-    _active_filter_items,
+    _active_filter_items, gender_available, GENDER_DIM_COL,
 )
 from filtered.projects import (
     load_project_members, applicant_email_index, project_count,
@@ -53,7 +53,7 @@ from filtered.projects import (
 from filtered.schools_distinct import distinct_school_count
 from filtered.aggregations import (
     agg_count, funnel_counts, acceptance_counts, trend_counts,
-    schools_counts, attribution_counts,
+    schools_counts, attribution_counts, gender_counts,
 )
 
 # Page configuration
@@ -270,6 +270,101 @@ st.markdown(f"""
         padding: 0 !important;
         margin: 0 !important;
     }}
+
+    /* --- Section header with an info affordance ----------------------------
+       Used by the frozen Gender chart. The header keeps its normal h3 look and
+       gains a small circled "i"; the explanation lives in a styled tooltip
+       (below) rather than the browser's native title="" box, which renders as
+       an OS-gray rectangle in a system font and looks foreign next to the
+       Google-style chrome everywhere else. */
+    .flt-head {{
+        display: flex;
+        align-items: center;
+        gap: 0.45rem;
+        font-size: 1.0rem;
+        font-weight: 600;
+        color: {COLORS['ink']};
+        margin: 0 0 0.15rem 0;
+    }}
+    .flt-head-muted {{ color: {COLORS['ink_3']}; }}
+
+    /* The tooltip host: an inline circled "i" that reveals .flt-tip on hover
+       or keyboard focus (tabindex="0" on the host makes it reachable). */
+    .flt-info {{
+        position: relative;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 16px;
+        height: 16px;
+        border-radius: 50%;
+        border: 1px solid {COLORS['border']};
+        color: {COLORS['ink_2']};
+        background: #ffffff;
+        font-size: 10px;
+        font-weight: 700;
+        font-style: normal;
+        line-height: 1;
+        cursor: help;
+        user-select: none;
+        transition: border-color 140ms ease-out, color 140ms ease-out;
+    }}
+    .flt-info:hover, .flt-info:focus-visible {{
+        border-color: {COLORS['blue']};
+        color: {COLORS['blue']};
+        outline: none;
+    }}
+
+    /* The panel itself: white card, hairline border, soft shadow — same
+       vocabulary as the KPI cards. Hidden via opacity+visibility (not display)
+       so it can fade rather than pop. */
+    .flt-tip {{
+        position: absolute;
+        top: calc(100% + 9px);
+        left: -8px;
+        z-index: 1000;
+        width: max-content;
+        max-width: 330px;
+        padding: 0.6rem 0.75rem;
+        background: #ffffff;
+        color: {COLORS['ink_2']};
+        border: 1px solid {COLORS['border']};
+        border-radius: 10px;
+        box-shadow: 0 4px 16px rgba(32, 33, 36, 0.13);
+        font-size: 0.8rem;
+        font-weight: 400;
+        line-height: 1.45;
+        letter-spacing: 0;
+        text-align: left;
+        white-space: normal;
+        opacity: 0;
+        visibility: hidden;
+        transform: translateY(-3px);
+        transition: opacity 150ms ease-out, transform 150ms ease-out,
+                    visibility 0s linear 150ms;
+    }}
+    .flt-info:hover .flt-tip, .flt-info:focus-visible .flt-tip {{
+        opacity: 1;
+        visibility: visible;
+        transform: translateY(0);
+        transition: opacity 150ms ease-out, transform 150ms ease-out,
+                    visibility 0s;
+    }}
+    /* Little pointer notch, built from the card's own border so it reads as
+       one continuous surface with the panel. */
+    .flt-tip::before {{
+        content: "";
+        position: absolute;
+        top: -5px;
+        left: 12px;
+        width: 8px;
+        height: 8px;
+        background: #ffffff;
+        border-left: 1px solid {COLORS['border']};
+        border-top: 1px solid {COLORS['border']};
+        transform: rotate(45deg);
+    }}
+    .flt-tip b {{ color: {COLORS['ink']}; font-weight: 600; }}
     </style>
 """, unsafe_allow_html=True)
 
@@ -297,6 +392,23 @@ def kpi_row(cards):
             f'</div>'
         )
     st.markdown(f'<div class="kpi-row">{"".join(items)}</div>', unsafe_allow_html=True)
+
+
+def section_header(text, note=None, muted=False):
+    """An h3-equivalent section header, optionally carrying a circled "i" that
+    reveals a styled tooltip (.flt-tip) on hover/focus.
+
+    Used instead of st.markdown("### ...") where a chart needs a caveat
+    attached to its title. `note` may contain <b> tags; everything else is
+    passed through as-is, so callers must not interpolate user input. `muted`
+    grays the title to match a frozen chart beneath it."""
+    cls = 'flt-head flt-head-muted' if muted else 'flt-head'
+    info = ''
+    if note:
+        # tabindex makes the tooltip reachable by keyboard, not just hover.
+        info = (f'<span class="flt-info" tabindex="0" role="note">i'
+                f'<span class="flt-tip">{note}</span></span>')
+    st.markdown(f'<div class="{cls}">{text}{info}</div>', unsafe_allow_html=True)
 
 
 def main():
@@ -397,6 +509,23 @@ def main():
             df_combined = fdf[['response_length']].dropna()
 
             prev_hacker_df = agg_count(sdf('attended_last_year'), 'attended_last_year', 'count', ['Yes', 'No'])
+
+            # --- Gender: live only past the RSVP gate ------------------------
+            # gender exists solely for RSVPed+ applicants (loaders.GENDER_COL),
+            # so the chart has two modes:
+            #   LIVE  (funnel >= RSVPed) — self-dims on its own dim like every
+            #         other filterable chart: full Male/Female split, selected
+            #         side coloured, other muted, rest of the dashboard filtered.
+            #   FROZEN(funnel <  RSVPed) — a fixed snapshot of the ENTIRE RSVP
+            #         population, ignoring all filters (user decision: frozen
+            #         means frozen, not "live minus the funnel"). Rendered gray
+            #         with a tooltip saying why and how to unfreeze.
+            gender_live = gender_available(filter_state)
+            if gender_live:
+                male_count, female_count = gender_counts(sdf(GENDER_DIM_COL))
+            else:
+                # Unfiltered wide_df restricted to RSVPed — the frozen snapshot.
+                male_count, female_count = gender_counts(wide_df[wide_df['is_rsvped']])
 
         if len(fdf) == 0:
             st.warning("No applicants match the current filters. Adjust or clear a filter in the sidebar.")
@@ -570,6 +699,32 @@ def main():
                                                 color=COLORS['amber'], highlight=hl('academic_year')),
                             use_container_width=True, theme=None, config=PLOTLY_CONFIG,
                             key="age_chart")
+
+            # --- Gender: binary split, Male blue / Female red. Both sides are
+            # identities (not "the rest"), so both carry a hue and both percents
+            # sit inside their own segment. When the funnel filter is below
+            # RSVPed the whole figure renders muted and static — see the
+            # gender_live block above for the two modes.
+            if gender_live:
+                section_header("Gender")
+            else:
+                section_header(
+                    "Gender", muted=True,
+                    note="Gender was only collected in the RSVP survey, so it "
+                         "exists for <b>RSVPed applicants only</b>.<br><br>"
+                         "This chart is frozen: it shows the full RSVP "
+                         "population and ignores the filters above. To see "
+                         "gender respond to your filters, set "
+                         "<b>Applicant funnel</b> to <b>RSVPed</b> or beyond.")
+            st.plotly_chart(create_split_bar("Male", "Female",
+                                             male_count, female_count,
+                                             left_color=COLORS['blue'],
+                                             right_color=COLORS['red'],
+                                             right_inside_pct=True,
+                                             muted=not gender_live,
+                                             highlight=hl(GENDER_DIM_COL) if gender_live else None),
+                            use_container_width=True, theme=None, config=PLOTLY_CONFIG,
+                            key="gender_split")
 
             st.markdown("---")
 

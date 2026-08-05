@@ -24,7 +24,7 @@ src/analysis/queries/funnel/retention.sql
 src/analysis/queries/funnel/rsvp.sql
 src/analysis/queries/winners/winners.sql
 
-src/analysis/queries/applications/gen*.sql
+# src/analysis/queries/applications/gen*.sql
 src/analysis/queries/applications/count_*.sql
 src/analysis/queries/applications/pro*.sql
 

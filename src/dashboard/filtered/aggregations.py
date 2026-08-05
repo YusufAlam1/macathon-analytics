@@ -10,6 +10,7 @@ import pandas as pd
 
 from filtered.loaders import (
     FUNNEL_STAGE_ORDER, STAGE_TO_FLAG, SCHOOL_ORDER, ATTRIB_ORDER,
+    GENDER_ORDER,
 )
 
 
@@ -64,6 +65,20 @@ def schools_counts(fdf):
     rank = {v: i for i, v in enumerate(SCHOOL_ORDER)}
     g['sort_order'] = g['school_group'].map(rank).fillna(len(SCHOOL_ORDER))
     return g.sort_values('sort_order')
+
+
+def gender_counts(fdf):
+    """(male, female) scalars for create_split_bar, from the RSVP-only gender
+    column. NULLs (applicants who never RSVPed, so were never surveyed) are
+    dropped rather than counted — see loaders.GENDER_COL. Mirrors
+    src/analysis/queries/applications/gender.sql's GROUP BY.
+
+    Returns plain ints so the caller can compare/format them without touching
+    pandas; a category absent from the filtered frame yields 0 rather than
+    raising, so any filter combination renders."""
+    g = fdf['gender'].dropna().value_counts()
+    male, female = GENDER_ORDER
+    return int(g.get(male, 0)), int(g.get(female, 0))
 
 
 def attribution_counts(fdf):
