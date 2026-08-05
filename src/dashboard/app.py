@@ -140,6 +140,7 @@ st.markdown(f"""
         margin: 0.5rem 0 0.5rem 0;
     }}
     .kpi-card {{
+        position: relative;
         flex: 1 1 0;
         min-height: 96px;
         box-sizing: border-box;
@@ -151,22 +152,85 @@ st.markdown(f"""
         flex-direction: column;
         justify-content: flex-start;
     }}
-    /* Cards carrying a measurement caveat (title=...). The only cue is a
-       help cursor and a slightly firmer border on hover — the note itself
-       stays in the native tooltip, so a reader who doesn't care never sees
-       a qualifier, and one who does gets it by pausing on the card. */
-    .kpi-card-hint {{
+    /* --- KPI cards carrying a measurement caveat --------------------------
+       The note hangs off a "?" icon pinned to the card's top-right corner,
+       mirroring the tooltip Streamlit puts next to a heading's help text (same
+       Lucide help-circle glyph). Previously the caveat lived in a title="" on
+       the whole card, which gave no visible affordance and rendered as the
+       OS-gray native box; the icon makes the qualifier discoverable and keeps
+       the panel in the dashboard's own chrome. */
+    .kpi-help {{
+        position: absolute;
+        top: 0.6rem;
+        right: 0.7rem;
+        width: 15px;
+        height: 15px;
+        color: {COLORS['ink_3']};
         cursor: help;
-        transition: border-color 140ms ease-out;
+        transition: color 140ms ease-out;
     }}
-    .kpi-card-hint:hover {{
-        border-color: #d4d7dc;
+    .kpi-help:hover, .kpi-help:focus-visible {{
+        color: {COLORS['blue']};
+        outline: none;
+    }}
+    .kpi-help svg {{ display: block; width: 100%; height: 100%; }}
+    /* Panel: same white card + hairline border + soft shadow vocabulary as the
+       cards themselves. Hidden with opacity+visibility (not display) so it can
+       fade in rather than pop. Right-anchored so it can't overflow the page on
+       the rightmost card. */
+    .kpi-tip {{
+        position: absolute;
+        top: calc(100% + 8px);
+        right: -6px;
+        z-index: 1000;
+        width: max-content;
+        max-width: 260px;
+        padding: 0.55rem 0.7rem;
+        background: #ffffff;
+        color: {COLORS['ink_2']};
+        border: 1px solid {COLORS['border']};
+        border-radius: 10px;
+        box-shadow: 0 4px 16px rgba(32, 33, 36, 0.13);
+        font-size: 0.78rem;
+        font-weight: 400;
+        line-height: 1.45;
+        letter-spacing: 0;
+        text-align: left;
+        white-space: normal;
+        opacity: 0;
+        visibility: hidden;
+        transform: translateY(-3px);
+        transition: opacity 150ms ease-out, transform 150ms ease-out,
+                    visibility 0s linear 150ms;
+    }}
+    .kpi-help:hover .kpi-tip, .kpi-help:focus-visible .kpi-tip {{
+        opacity: 1;
+        visibility: visible;
+        transform: translateY(0);
+        transition: opacity 150ms ease-out, transform 150ms ease-out,
+                    visibility 0s;
+    }}
+    /* Pointer notch, drawn from the panel's own border so the two read as one
+       continuous surface. */
+    .kpi-tip::before {{
+        content: "";
+        position: absolute;
+        top: -5px;
+        right: 10px;
+        width: 8px;
+        height: 8px;
+        background: #ffffff;
+        border-left: 1px solid {COLORS['border']};
+        border-top: 1px solid {COLORS['border']};
+        transform: rotate(45deg);
     }}
     .kpi-label {{
         color: {COLORS['ink_2']};
         font-size: 0.82rem;
         font-weight: 500;
         margin-bottom: 0.35rem;
+        /* leave room for the "?" so a long label never runs under it */
+        padding-right: 1.1rem;
     }}
     .kpi-value {{
         color: {COLORS['ink']};
@@ -271,102 +335,21 @@ st.markdown(f"""
         margin: 0 !important;
     }}
 
-    /* --- Section header with an info affordance ----------------------------
-       Used by the frozen Gender chart. The header keeps its normal h3 look and
-       gains a small circled "i"; the explanation lives in a styled tooltip
-       (below) rather than the browser's native title="" box, which renders as
-       an OS-gray rectangle in a system font and looks foreign next to the
-       Google-style chrome everywhere else. */
-    .flt-head {{
-        display: flex;
-        align-items: center;
-        gap: 0.45rem;
-        font-size: 1.0rem;
-        font-weight: 600;
-        color: {COLORS['ink']};
-        margin: 0 0 0.15rem 0;
-    }}
-    .flt-head-muted {{ color: {COLORS['ink_3']}; }}
-
-    /* The tooltip host: an inline circled "i" that reveals .flt-tip on hover
-       or keyboard focus (tabindex="0" on the host makes it reachable). */
-    .flt-info {{
-        position: relative;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        width: 16px;
-        height: 16px;
-        border-radius: 50%;
-        border: 1px solid {COLORS['border']};
-        color: {COLORS['ink_2']};
-        background: #ffffff;
-        font-size: 10px;
-        font-weight: 700;
-        font-style: normal;
-        line-height: 1;
-        cursor: help;
-        user-select: none;
-        transition: border-color 140ms ease-out, color 140ms ease-out;
-    }}
-    .flt-info:hover, .flt-info:focus-visible {{
-        border-color: {COLORS['blue']};
-        color: {COLORS['blue']};
-        outline: none;
-    }}
-
-    /* The panel itself: white card, hairline border, soft shadow — same
-       vocabulary as the KPI cards. Hidden via opacity+visibility (not display)
-       so it can fade rather than pop. */
-    .flt-tip {{
-        position: absolute;
-        top: calc(100% + 9px);
-        left: -8px;
-        z-index: 1000;
-        width: max-content;
-        max-width: 330px;
-        padding: 0.6rem 0.75rem;
-        background: #ffffff;
-        color: {COLORS['ink_2']};
-        border: 1px solid {COLORS['border']};
-        border-radius: 10px;
-        box-shadow: 0 4px 16px rgba(32, 33, 36, 0.13);
-        font-size: 0.8rem;
-        font-weight: 400;
-        line-height: 1.45;
-        letter-spacing: 0;
-        text-align: left;
-        white-space: normal;
-        opacity: 0;
-        visibility: hidden;
-        transform: translateY(-3px);
-        transition: opacity 150ms ease-out, transform 150ms ease-out,
-                    visibility 0s linear 150ms;
-    }}
-    .flt-info:hover .flt-tip, .flt-info:focus-visible .flt-tip {{
-        opacity: 1;
-        visibility: visible;
-        transform: translateY(0);
-        transition: opacity 150ms ease-out, transform 150ms ease-out,
-                    visibility 0s;
-    }}
-    /* Little pointer notch, built from the card's own border so it reads as
-       one continuous surface with the panel. */
-    .flt-tip::before {{
-        content: "";
-        position: absolute;
-        top: -5px;
-        left: 12px;
-        width: 8px;
-        height: 8px;
-        background: #ffffff;
-        border-left: 1px solid {COLORS['border']};
-        border-top: 1px solid {COLORS['border']};
-        transform: rotate(45deg);
-    }}
-    .flt-tip b {{ color: {COLORS['ink']}; font-weight: 600; }}
     </style>
 """, unsafe_allow_html=True)
+
+
+# Lucide "help-circle" — the same glyph Streamlit renders next to a heading's
+# help text, inlined here because the KPI row is hand-built HTML (one markdown
+# block) and so can't use st.*'s `help=` argument.
+_HELP_ICON_SVG = (
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" '
+    'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
+    '<circle cx="12" cy="12" r="10"></circle>'
+    '<path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>'
+    '<line x1="12" y1="17" x2="12.01" y2="17"></line>'
+    '</svg>'
+)
 
 
 def kpi_row(cards):
@@ -374,19 +357,26 @@ def kpi_row(cards):
     height and the row sits flush inside a single wrapping rectangle.
 
     Each card is (label, value) or (label, value, note). `note` is a caveat
-    about how the number is measured — rendered as the native browser tooltip
-    so it stays invisible until the reader hovers, rather than cluttering the
-    card with a qualifier most viewers don't need."""
+    about how the number is measured; it hangs off a "?" icon in the card's
+    top-right corner and stays hidden until hover/focus, so a reader who
+    doesn't care never sees a qualifier while one who does has a visible
+    affordance to reach for."""
     items = []
     for card in cards:
         label, value = card[0], card[1]
         note = card[2] if len(card) > 2 else None
-        # html.escape: the note is prose with commas/apostrophes going into an
-        # HTML attribute, so quotes must not break out of title="...".
-        title = f' title="{html.escape(str(note), quote=True)}"' if note else ''
-        hint = ' kpi-card-hint' if note else ''
+        help_el = ''
+        if note:
+            # html.escape: the note is prose with apostrophes/quotes going into
+            # markup, so it must not break out of the surrounding element.
+            # tabindex makes the tooltip keyboard-reachable, not hover-only.
+            help_el = (f'<span class="kpi-help" tabindex="0" role="note">'
+                       f'{_HELP_ICON_SVG}'
+                       f'<span class="kpi-tip">{html.escape(str(note))}</span>'
+                       f'</span>')
         items.append(
-            f'<div class="kpi-card{hint}"{title}>'
+            f'<div class="kpi-card">'
+            f'{help_el}'
             f'<div class="kpi-label">{label}</div>'
             f'<div class="kpi-value">{value}</div>'
             f'</div>'
@@ -395,20 +385,25 @@ def kpi_row(cards):
 
 
 def section_header(text, note=None, muted=False):
-    """An h3-equivalent section header, optionally carrying a circled "i" that
-    reveals a styled tooltip (.flt-tip) on hover/focus.
+    """A section header matching the "### ..." headers used everywhere else,
+    optionally carrying a tooltip.
 
-    Used instead of st.markdown("### ...") where a chart needs a caveat
-    attached to its title. `note` may contain <b> tags; everything else is
-    passed through as-is, so callers must not interpolate user input. `muted`
-    grays the title to match a frozen chart beneath it."""
-    cls = 'flt-head flt-head-muted' if muted else 'flt-head'
-    info = ''
-    if note:
-        # tabindex makes the tooltip reachable by keyboard, not just hover.
-        info = (f'<span class="flt-info" tabindex="0" role="note">i'
-                f'<span class="flt-tip">{note}</span></span>')
-    st.markdown(f'<div class="{cls}">{text}{info}</div>', unsafe_allow_html=True)
+    Uses st.subheader rather than st.markdown("### ...") because subheader
+    takes a `help` argument — Streamlit's own tooltip component, which already
+    matches the dashboard's chrome — while still emitting the native heading
+    anchor (the small link icon) that every other section header has. Hand-
+    rolling the tooltip in a raw <div> loses that anchor and makes this one
+    header the odd one out.
+
+    `note` is GitHub-flavored Markdown (NOT html — `**bold**`, not `<b>`).
+    `muted` grays the title to match a frozen chart beneath it."""
+    if muted:
+        # Streamlit has no color argument for headings, so the muted variant
+        # goes through markdown's :gray[...] color directive, which subheader
+        # accepts as part of its body. The anchor is left ON either way, so the
+        # link icon is present in both states like every other section header.
+        text = f":gray[{text}]"
+    st.subheader(text, help=note)
 
 
 def main():
@@ -711,11 +706,11 @@ def main():
                 section_header(
                     "Gender", muted=True,
                     note="Gender was only collected in the RSVP survey, so it "
-                         "exists for <b>RSVPed applicants only</b>.<br><br>"
+                         "exists for **RSVPed applicants only**.\n\n"
                          "This chart is frozen: it shows the full RSVP "
                          "population and ignores the filters above. To see "
                          "gender respond to your filters, set "
-                         "<b>Applicant funnel</b> to <b>RSVPed</b> or beyond.")
+                         "**Applicant funnel** to **RSVPed** or beyond.")
             st.plotly_chart(create_split_bar("Male", "Female",
                                              male_count, female_count,
                                              left_color=COLORS['blue'],
