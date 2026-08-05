@@ -623,8 +623,8 @@ def main():
              "Note: Value only accounts for physically checked-in hackers"
              ", true attendance count expected to be higher."),
             ("Schools Represented", f"{schools:,}",
-             "Counts schools with at least two applicants"
-             ". Single-applicant schools are excluded."),
+             "Note: Only schools with at least two applicants are considered in count."),
+            #  ". Single-applicant schools are excluded."),
             ("Projects Completed", f"{projects:,}"),
         ])
 
@@ -665,7 +665,7 @@ def main():
 
             with ret_col:
                 st.markdown("### Returning hackers")
-                st.caption("Attended Mac-a-Thon last year (Jan. 2025)")
+                st.caption("Attended Mac-a-Thon last year (Feb. 2025)")
                 st.plotly_chart(create_pie_chart(prev_hacker_df, 'attended_last_year', 'count',
                                                  colors=[COLORS['red'], COLORS['green']],
                                                  highlight=hl('attended_last_year')),

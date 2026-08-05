@@ -429,7 +429,7 @@ def create_pie_chart(df, label_col, value_col, colors=None, height=340, highligh
         # the ring; without that top clearance a thin 12-o'clock slice's label
         # (the 2.6% "Yes") rides off the top edge and clips. Shrinking the pie,
         # not the container, is what makes room for the labels.
-        domain=dict(x=[0.15, 0.85], y=[0.14, 0.80]),
+        domain=dict(x=[0.15, 0.85], y=[0.06, 1.00]),
         marker=dict(colors=slice_colors,
                     line=dict(color=COLORS['surface'], width=2)),
         sort=False,
