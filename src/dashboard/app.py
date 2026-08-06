@@ -744,7 +744,7 @@ def main():
             with c1:
                 section_header(
                     "Schools",
-                    note="Canadian schools with fewer than 20 applicants are grouped into "
+                    note="Canadian schools with proportionally less applicants are grouped into "
                          "**Other Canada**")
                 # st.caption("Smaller schools grouped by region; College and High School kept separate")
                 st.plotly_chart(create_hbar(schools_df, 'school_group', 'count', sort_col='sort_order',
