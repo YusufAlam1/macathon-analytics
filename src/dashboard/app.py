@@ -645,7 +645,7 @@ def main():
             ("Applications Received", f"{total_apps:,}"),
             ("Hackers Engaged", f"{attended:,}",
              "Note: Value only accounts for physically checked-in hackers"
-             ", true attendance count expected to be higher."),
+             ", true attendance count expected to have been higher."),
             ("Schools Represented", f"{schools:,}",
              "Note: Only schools with at least two applicants are considered in count."),
             #  ". Single-applicant schools are excluded."),
