@@ -2,6 +2,7 @@
 Main Dashboard Orchestrator
 Handles layout, UI, and coordinates between data layer (queries) and visualization layer
 """
+import base64
 import html
 import os
 from contextlib import nullcontext
@@ -481,15 +482,32 @@ def section_header(text, note=None, muted=False):
 
 def main():
     # ---------- Header ----------
-    col_logo, col_title = st.columns([1, 14])
+    # Mac-a-Thon left, title center, GDG right. The two logos are sized to the
+    # same rendered HEIGHT (~47px) rather than the same width, since their aspect
+    # ratios differ (Mac-a-Thon 1080x900, GDG 382x232) and matching widths would
+    # leave the GDG mark looking undersized.
+    col_logo, col_title, col_gdg = st.columns([1, 12, 2], vertical_alignment="center")
     with col_logo:
-        logo_path = os.path.join(os.path.dirname(__file__), 'images', 'GDG OFFICIAL LOGO.svg')
-        if os.path.exists(logo_path):
-            st.image(logo_path, width=56)
+        logo_path_mac = os.path.join(os.path.dirname(__file__), 'images', 'Mac-a-Thon-LOGO.svg')
+        if os.path.exists(logo_path_mac):
+            st.image(logo_path_mac, width=56)
     with col_title:
         st.markdown('<p class="header-title">Mac-a-Thon Applicant Analytics</p>', unsafe_allow_html=True)
-        st.markdown('<p class="header-sub">Goole Developer Groups · McMaster University</p>',
+        st.markdown('<p class="header-sub">Google Developer Groups · McMaster University</p>',
                     unsafe_allow_html=True)
+    with col_gdg:
+        # st.image() has no alignment option, so the right-hand logo goes through
+        # a flex-end div with the SVG inlined as a data URI.
+        logo_path_gdg = os.path.join(os.path.dirname(__file__), 'images', 'GDG OFFICIAL LOGO.svg')
+        if os.path.exists(logo_path_gdg):
+            with open(logo_path_gdg, 'rb') as fh:
+                gdg_b64 = base64.b64encode(fh.read()).decode('ascii')
+            st.markdown(
+                '<div style="display:flex;justify-content:flex-end;align-items:center;">'
+                f'<img src="data:image/svg+xml;base64,{gdg_b64}" width="78"/>'
+                '</div>',
+                unsafe_allow_html=True,
+            )
 
     # ---------- FILTERED FEATURE: load the wide table before the sidebar,
     # since the filter widgets need it to populate their option lists ----------
