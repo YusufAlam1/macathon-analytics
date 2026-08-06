@@ -7,6 +7,7 @@ import os
 from contextlib import nullcontext
 
 import streamlit as st
+from PIL import Image
 from queries import (
     load_attribution_data,
     load_country_data,
@@ -57,9 +58,14 @@ from filtered.aggregations import (
 )
 
 # Page configuration
+# page_icon needs decoded pixels, so it takes the rasterized PNG rather than the
+# SVG that st.image() renders elsewhere. Path is absolute so the app can be
+# launched from any working directory.
+_ICON_PATH = os.path.join(os.path.dirname(__file__), 'images', 'Mac-a-Thon-LOGO.png')
+
 st.set_page_config(
     page_title="Mac-a-Thon Applications",
-    page_icon="📊",
+    page_icon=Image.open(_ICON_PATH) if os.path.exists(_ICON_PATH) else "📊",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -481,8 +487,8 @@ def main():
         if os.path.exists(logo_path):
             st.image(logo_path, width=56)
     with col_title:
-        st.markdown('<p class="header-title">Mac-a-Thon Applications</p>', unsafe_allow_html=True)
-        st.markdown('<p class="header-sub">GDG on Campus · McMaster University — applicant analytics</p>',
+        st.markdown('<p class="header-title">Mac-a-Thon Applicant Analytics</p>', unsafe_allow_html=True)
+        st.markdown('<p class="header-sub">Goole Developer Groups · McMaster University</p>',
                     unsafe_allow_html=True)
 
     # ---------- FILTERED FEATURE: load the wide table before the sidebar,
@@ -718,7 +724,10 @@ def main():
             # flush.
             c1, c2 = st.columns(2, gap="large")
             with c1:
-                st.markdown("### Schools")
+                section_header(
+                    "Schools",
+                    note="Canadian schools with fewer than 20 applicants are grouped into "
+                         "**Other Canada**")
                 # st.caption("Smaller schools grouped by region; College and High School kept separate")
                 st.plotly_chart(create_hbar(schools_df, 'school_group', 'count', sort_col='sort_order',
                                             color=COLORS['blue'], highlight=hl('school_group'),
